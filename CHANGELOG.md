@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-11-08
+
 ### Added
 - `SpecRun`, the durable record of one run, with `RunState` and `TERMINAL_STATES`. All its columns are in the first migration, and a system check refuses a router that sends it away from the default alias.
 - `TaskBackend`, the one-method protocol a queue implements.
@@ -21,4 +23,5 @@
 - `SpecRun` is registered read-only in the admin: no add, change, delete or actions; `params`, `carried` and `output` are hidden, and refused as URL lookups, unless a subclass sets `show_payloads`.
 - A page on composing with django-domain-events with no import in either direction: an event starting a run, a service firing inside a run, a run finishing and firing an event, and a delayed run, built on `carry=`, `around_run=` and `on_finish=`; it states the one-database condition, that a replay is a new run, attribution against authorization, and why a run is not a delivery.
 
-[Unreleased]: https://github.com/Artui/django-spec-tasks/compare/v0.0.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-tasks/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Artui/django-spec-tasks/compare/v0.0.0...v0.1.0
