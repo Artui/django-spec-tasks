@@ -20,13 +20,13 @@ from django_service_specs import (
     ServiceSpec,
     ServiceValidationError,
     Unrestricted,
-    unanswered_refusals,
 )
 
 from django_spec_tasks.models.spec_run import SpecRun
 from django_spec_tasks.types.run_state import RunState
 from django_spec_tasks.worker.run_spec import run_spec
 from django_spec_tasks.worker.run_state_for import run_state_for
+from tests.worker.conftest import built_refusals
 
 pytestmark = pytest.mark.django_db
 
@@ -38,25 +38,18 @@ class _IsStaff(PermissionCheck):
         return getattr(principal, "is_staff", False)
 
 
-def _built_refusals() -> list[Exception]:
-    built: list[Exception] = []
-
-    def collect(error: Exception) -> RunState:
-        built.append(error)
-        return RunState.REFUSED
-
-    unanswered_refusals(collect)
-    return built
-
-
-@pytest.mark.parametrize("error", _built_refusals(), ids=lambda error: type(error).__name__)
-def test_a_service_raising_each_refusal_ends_named_and_stated(
-    make_run: Callable[..., SpecRun], error: Exception
-) -> None:
+def _raising(error: Exception) -> ServiceSpec:
     def service() -> None:
         raise error
 
-    run = make_run(ServiceSpec(service=service, permissions=[Unrestricted()]))
+    return ServiceSpec(service=service, permissions=[Unrestricted()])
+
+
+@pytest.mark.parametrize("error", built_refusals(), ids=lambda error: type(error).__name__)
+def test_a_service_raising_each_refusal_ends_named_and_stated(
+    make_run: Callable[..., SpecRun], error: Exception
+) -> None:
+    run = make_run(_raising(error))
 
     run_spec(str(run.pk))
 
@@ -103,10 +96,7 @@ def test_an_argument_outside_the_declared_set_is_invalid(make_run: Callable[...,
 
 
 def test_a_service_validation_error_keeps_its_detail(make_run: Callable[..., SpecRun]) -> None:
-    def service() -> None:
-        raise ServiceValidationError({"total": ["Too much."]})
-
-    run = make_run(ServiceSpec(service=service, permissions=[Unrestricted()]))
+    run = make_run(_raising(ServiceValidationError({"total": ["Too much."]})))
 
     run_spec(str(run.pk))
 
@@ -133,10 +123,7 @@ def test_an_unmet_affordance_is_a_conflict_with_its_code(make_run: Callable[...,
 
 
 def test_a_conflict_with_no_code_has_none(make_run: Callable[..., SpecRun]) -> None:
-    def service() -> None:
-        raise ServiceConflict("Taken.")
-
-    run = make_run(ServiceSpec(service=service, permissions=[Unrestricted()]))
+    run = make_run(_raising(ServiceConflict("Taken.")))
 
     run_spec(str(run.pk))
 
@@ -148,10 +135,7 @@ def test_a_conflict_with_no_code_has_none(make_run: Callable[..., SpecRun]) -> N
 def test_input_required_records_what_is_missing(make_run: Callable[..., SpecRun]) -> None:
     schema = {"confirmed": {"type": "boolean"}}
 
-    def service() -> None:
-        raise AdditionalInputRequired("Confirm to proceed.", schema=schema)
-
-    run = make_run(ServiceSpec(service=service, permissions=[Unrestricted()]))
+    run = make_run(_raising(AdditionalInputRequired("Confirm to proceed.", schema=schema)))
 
     run_spec(str(run.pk))
 
@@ -164,10 +148,7 @@ def test_input_required_records_what_is_missing(make_run: Callable[..., SpecRun]
 def test_a_refusal_whose_detail_cannot_be_stored_keeps_its_state_and_message(
     make_run: Callable[..., SpecRun],
 ) -> None:
-    def service() -> None:
-        raise ServiceValidationError({"total": object()})
-
-    run = make_run(ServiceSpec(service=service, permissions=[Unrestricted()]))
+    run = make_run(_raising(ServiceValidationError({"total": object()})))
 
     run_spec(str(run.pk))
 
@@ -180,10 +161,7 @@ def test_a_refusal_whose_detail_cannot_be_stored_keeps_its_state_and_message(
 def test_an_exception_nobody_declared_is_a_failure_with_its_traceback(
     make_run: Callable[..., SpecRun],
 ) -> None:
-    def service() -> None:
-        raise ValueError("a bug, somewhere")
-
-    run = make_run(ServiceSpec(service=service, permissions=[Unrestricted()]))
+    run = make_run(_raising(ValueError("a bug, somewhere")))
 
     run_spec(str(run.pk))
 
@@ -271,13 +249,6 @@ def test_a_lapsed_principal_s_identifier_stays_out_of_what_a_reader_is_shown(
     run.refresh_from_db()
     assert run.state == RunState.AUTHORIZATION_LAPSED
     assert run.refusal_detail["message"] == PrincipalUnavailable.default_message
-
-
-def _raising(error: Exception) -> ServiceSpec:
-    def service() -> None:
-        raise error
-
-    return ServiceSpec(service=service, permissions=[Unrestricted()])
 
 
 @pytest.mark.parametrize(

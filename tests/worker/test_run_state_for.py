@@ -21,6 +21,7 @@ from django_service_specs import (
 
 from django_spec_tasks.types.run_state import RunState
 from django_spec_tasks.worker.run_state_for import _STATES, run_state_for
+from tests.worker.conftest import built_refusals
 
 _EXPECTED = {
     DispatchError: RunState.INVALID,
@@ -37,18 +38,6 @@ _EXPECTED = {
 }
 
 
-def _built_refusals() -> list[DispatchError | ServiceError]:
-    """One of each refusal, built as the kernel raises it, handed over by its own check."""
-    built: list[DispatchError | ServiceError] = []
-
-    def collect(error: DispatchError | ServiceError) -> RunState:
-        built.append(error)
-        return RunState.REFUSED
-
-    unanswered_refusals(collect)
-    return built
-
-
 def test_the_table_answers_every_refusal_and_shadows_no_row() -> None:
     assert unanswered_refusals(_STATES) == ()
 
@@ -57,7 +46,7 @@ def test_the_expectations_below_name_every_refusal_the_kernel_has() -> None:
     assert set(_EXPECTED) == set(REFUSALS)
 
 
-@pytest.mark.parametrize("error", _built_refusals(), ids=lambda error: type(error).__name__)
+@pytest.mark.parametrize("error", built_refusals(), ids=lambda error: type(error).__name__)
 def test_each_refusal_has_its_state(error: DispatchError | ServiceError) -> None:
     # Coverage reads the table as one expression, and a deleted row whose base answers
     # still passes the check above, so each row is held here by its own case.

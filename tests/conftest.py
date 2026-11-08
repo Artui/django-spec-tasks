@@ -1,4 +1,4 @@
-"""Fixtures the whole suite shares. A lane's own go in ``tests/<lane>/conftest.py``."""
+"""Fixtures the whole suite shares. A package's own go in ``tests/<package>/conftest.py``."""
 
 from __future__ import annotations
 

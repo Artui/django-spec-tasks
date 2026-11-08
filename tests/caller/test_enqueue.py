@@ -329,9 +329,9 @@ class TestTheMessage:
         self, binding: TaskBinding, backend: RecordingBackend, user: Any
     ) -> None:
         # Not a supported setup (the system check refuses a run table off the default alias);
-        # it isolates the mechanism. A router sends the run table to the second connection. A callback registered on
-        # the default alias would find autocommit there and fire at once, before this
-        # transaction committed.
+        # it isolates the mechanism. A router sends the run table to the second connection. A
+        # callback registered on the default alias would find autocommit there and fire at
+        # once, before this transaction committed.
         class ToProgress:
             def db_for_write(self, model: Any, **hints: Any) -> str | None:
                 return "progress" if model is SpecRun else None

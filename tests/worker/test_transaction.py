@@ -216,8 +216,9 @@ def test_only_an_atomic_spec_runs_inside_a_transaction(
     assert seen == [expected]
 
 
-def test_an_atomic_false_spec_presents_outside_a_transaction_too(
-    make_run: Callable[..., SpecRun],
+@pytest.mark.parametrize("atomic", [True, False], ids=["atomic", "not_atomic"])
+def test_a_spec_presents_in_a_transaction_only_when_atomic(
+    make_run: Callable[..., SpecRun], atomic: bool
 ) -> None:
     # Held apart from the service: the kernel never opens a transaction around a presenter,
     # so the in-the-service case above could not see an outer one that closed early.
@@ -231,29 +232,11 @@ def test_an_atomic_false_spec_presents_outside_a_transaction_too(
             seen.append(connection.in_atomic_block)
             return value
 
-    run = make_run(_spec(atomic=False, presenter=Looks()))
+    run = make_run(_spec(atomic=atomic, presenter=Looks()))
 
     run_spec(str(run.pk))
 
-    assert seen == [False]
-
-
-def test_an_atomic_spec_presents_inside_its_transaction(make_run: Callable[..., SpecRun]) -> None:
-    seen: list[bool] = []
-
-    class Looks(Presenter):
-        def output(self) -> Any:
-            return None
-
-        def present(self, value: Any) -> Any:
-            seen.append(connection.in_atomic_block)
-            return value
-
-    run = make_run(_spec(atomic=True, presenter=Looks()))
-
-    run_spec(str(run.pk))
-
-    assert seen == [True]
+    assert seen == [atomic]
 
 
 def test_a_selector_runs_outside_a_transaction(make_run: Callable[..., SpecRun]) -> None:

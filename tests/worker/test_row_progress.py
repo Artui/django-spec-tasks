@@ -196,19 +196,26 @@ def test_a_failed_write_keeps_the_service_s_work(
     assert Note.objects.count() == 1
 
 
+def _watched(
+    make_run: Callable[..., SpecRun], *, atomic: bool = True, **binding: Any
+) -> tuple[SpecRun, list[Any]]:
+    """A row whose service reports once, then reads its own column over the other connection."""
+    seen: list[Any] = []
+
+    def service(progress: Any) -> None:
+        progress(1)
+        seen.append(SpecRun.objects.using("progress").get(pk=run.pk).progress)
+
+    spec = ServiceSpec(service=service, atomic=atomic, permissions=[Unrestricted()])
+    run = make_run(spec, **binding)
+    return run, seen
+
+
 @pytest.mark.django_db(transaction=True, databases=_BOTH)
 def test_progress_under_atomic_false_is_visible_from_another_connection(
     make_run: Callable[..., SpecRun],
 ) -> None:
-    seen: list[Any] = []
-    run_ids: list[Any] = []
-
-    def service(progress: Any) -> None:
-        progress(1)
-        seen.append(SpecRun.objects.using("progress").get(pk=run_ids[0]).progress)
-
-    run = make_run(ServiceSpec(service=service, atomic=False, permissions=[Unrestricted()]))
-    run_ids.append(run.pk)
+    run, seen = _watched(make_run, atomic=False)
 
     run_spec(str(run.pk))
 
@@ -219,15 +226,7 @@ def test_progress_under_atomic_false_is_visible_from_another_connection(
 def test_progress_under_atomic_true_with_no_alias_is_invisible_until_commit(
     make_run: Callable[..., SpecRun],
 ) -> None:
-    seen: list[Any] = []
-    run_ids: list[Any] = []
-
-    def service(progress: Any) -> None:
-        progress(1)
-        seen.append(SpecRun.objects.using("progress").get(pk=run_ids[0]).progress)
-
-    run = make_run(ServiceSpec(service=service, permissions=[Unrestricted()]))
-    run_ids.append(run.pk)
+    run, seen = _watched(make_run)
 
     run_spec(str(run.pk))
 
@@ -241,17 +240,7 @@ def test_progress_under_atomic_true_through_an_alias_is_visible_during_the_run(
     make_run: Callable[..., SpecRun],
 ) -> None:
     # Nothing written on ``default`` yet, so SQLite has no write lock to refuse it for.
-    seen: list[Any] = []
-    run_ids: list[Any] = []
-
-    def service(progress: Any) -> None:
-        progress(1)
-        seen.append(SpecRun.objects.using("progress").get(pk=run_ids[0]).progress)
-
-    run = make_run(
-        ServiceSpec(service=service, permissions=[Unrestricted()]), progress_using="progress"
-    )
-    run_ids.append(run.pk)
+    run, seen = _watched(make_run, progress_using="progress")
 
     run_spec(str(run.pk))
 
