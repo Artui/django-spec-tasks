@@ -81,3 +81,4 @@ nav:
   - Backends: backends.md
   - Worker: worker.md
   - Operating: operating.md
+  - Reference: reference.md

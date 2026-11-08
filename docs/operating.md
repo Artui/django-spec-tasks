@@ -8,7 +8,7 @@ it runs anything periodic: a Celery beat entry, cron, or its platform's schedule
 ## The sweep
 
 ```python
-from django_spec_tasks.sweep.sweep_runs import sweep_runs
+from django_spec_tasks import sweep_runs
 
 report = sweep_runs()  # SweepReport(reasked=0, requeued=1, abandoned=0, unavailable=0, errors=0)
 ```
@@ -70,7 +70,7 @@ row. Under `atomic=True` its effects roll back; under `atomic=False` they stand.
 ## Reading a run
 
 ```python
-from django_spec_tasks.read.read_run import read_run
+from django_spec_tasks import read_run
 
 status = read_run(orders, run_id, request.user)
 ```
@@ -126,14 +126,4 @@ admin.site.register(SpecRun, PayloadSpecRunAdmin)
 
 ## Reference
 
-::: django_spec_tasks.sweep.sweep_runs.sweep_runs
-
-::: django_spec_tasks.types.sweep_report.SweepReport
-
-::: django_spec_tasks.sweep.prune_runs.prune_runs
-
-::: django_spec_tasks.read.read_run.read_run
-
-::: django_spec_tasks.read.state_of.state_of
-
-::: django_spec_tasks.types.run_status.RunStatus
+Every name on this page is in the [API reference](reference.md).

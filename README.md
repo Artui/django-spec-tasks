@@ -13,5 +13,21 @@ Run a [django-service-specs](https://github.com/Artui/django-service-specs) spec
 a durable run record, and a worker that re-checks through `dispatch`.
 
 ```bash
-pip install django-spec-tasks
+pip install "django-spec-tasks[celery]"        # or
+pip install "django-spec-tasks[django-tasks]"  # the backport, below Django 6.0
 ```
+
+```python
+from django_spec_tasks import TaskBinding, enqueue, read_run
+from django_spec_tasks.backends.celery_backend import CeleryBackend
+
+orders = TaskBinding(name="orders", registry=order_specs, backend=CeleryBackend())
+
+run_id = enqueue(orders, "refund_order", {"order": "7"}, actor=request.user)
+status = read_run(orders, run_id, request.user)
+```
+
+The queue decides where the code runs; the row decides whether it ran. A backend may lose a message or deliver
+it twice without consequence, which is what lets one protocol hold Celery and Django Tasks.
+
+Read [the documentation](https://artui.github.io/django-spec-tasks/).
