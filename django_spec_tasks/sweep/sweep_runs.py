@@ -155,7 +155,7 @@ def _candidates(now: datetime, limit: int, batch_size: int) -> Iterator[SpecRun]
     nobody else coming for it.
     """
     live = SpecRun.objects.filter(state__in=(RunState.PENDING, RunState.RUNNING))
-    for name in sorted(set(live.values_list("binding", flat=True).distinct())):
+    for name in sorted(live.values_list("binding", flat=True).distinct()):
         binding = TaskBinding.named(name)
         grace = _DEFAULT_GRACE if binding is None else binding.grace
         lapsed = SpecRun.objects.filter(

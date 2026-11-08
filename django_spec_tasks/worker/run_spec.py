@@ -1,5 +1,3 @@
-"""``run_spec`` - run one row: claim it, call the spec, record how it ended."""
-
 from __future__ import annotations
 
 import logging

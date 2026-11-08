@@ -1,5 +1,3 @@
-"""``run_state_for`` - the state a run ends in when its call raised."""
-
 from __future__ import annotations
 
 from django_service_specs import (

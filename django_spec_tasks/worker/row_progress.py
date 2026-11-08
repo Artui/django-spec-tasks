@@ -1,5 +1,3 @@
-"""``RowProgress`` - a progress reporter that writes to the run's own row."""
-
 from __future__ import annotations
 
 import logging
