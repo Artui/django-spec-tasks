@@ -52,13 +52,14 @@ to the default alias.
 
 **A replay is a new run.** `replay_events` reopens a finished delivery, the receiver runs again, and
 `enqueue` writes another row. That is what a replay asks for: the event is owed again, and what an
-event is owed is a run. It is a statement here and not a guard, because a project that wants a replay to be
-a no-op can make the spec idempotent, and one that wants it to repeat the work has nothing to undo.
+event is owed is a run. It is a statement here and not a guard. `idempotent` does not change it, since that
+only decides whether the sweep may requeue a run whose worker was lost; if the second call should change
+nothing, that comes from the service's own logic.
 
 **An event's actor is attribution, not authorization.** The receiver chooses the principal itself, or
 passes `actor=None` and lets the spec answer for a system run. The event is never handed to the permission
 check as a grant. `None` is admitted only by a spec whose permissions admit it, and a gated spec refuses
-it at `enqueue` with `PermissionCheckDenied`. Whoever fired the event may have acted with a role the worker
+it at `enqueue` with `NotPermitted`. Whoever fired the event may have acted with a role the worker
 will not find, and the worker re-checks everything `enqueue` did, so a run is authorized now or it is
 `AUTHORIZATION_LAPSED`.
 
@@ -167,8 +168,9 @@ What that guarantees:
 - **A lost claim fires nothing.** A worker whose lease lapsed finds the terminal write matching no row, so
   the write does not happen, `on_finish` is not called, and under `atomic=True` what the service fired
   rolls back as well. Under `atomic=False` what the service fired stands, and no finish event exists.
-- **The sweep fires it for its endings.** A run the sweep ends `ABANDONED` or `SPEC_UNAVAILABLE` calls the
-  same hook, in the transaction of its write, on a row of the same shape as the worker's.
+- **The sweep fires it for its endings.** A run the sweep ends `ABANDONED`, or `SPEC_UNAVAILABLE` while its
+  binding is still registered, calls the same hook, in the transaction of its write, on a row of the same
+  shape as the worker's.
 - **A hook that raises takes the write with it.** The event it fired before raising is gone, the run stays
   `RUNNING`, and the sweep answers it.
 
@@ -178,7 +180,7 @@ above takes its correlation from the row.
 ## A delayed run
 
 domain-events lets a receiver declare when its delivery runs: `due=` takes a `timedelta`, counted from
-the event, or a callable returning an aware datetime. A receiver that calls `enqueue` with a `due` is a
+the event, or a callable returning an aware datetime. A receiver declared with `due=` that calls `enqueue` is a
 delayed spec run, and nothing in either package is a scheduler.
 
 ```python

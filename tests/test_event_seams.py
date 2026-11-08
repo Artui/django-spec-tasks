@@ -41,6 +41,15 @@ _caller_correlation: ContextVar[str | None] = ContextVar("caller_correlation", d
 _scope: ContextVar[dict[str, Any] | None] = ContextVar("scope", default=None)
 
 
+# What happened in the worker, in order: the seam's entry and exit, and each event written.
+_trace: list[str] = []
+
+
+@pytest.fixture(autouse=True)
+def _clear_the_trace() -> None:
+    _trace.clear()
+
+
 class _Killed(BaseException):
     """A worker dying outright: nothing above it may catch this."""
 
@@ -67,6 +76,7 @@ class _Backend:
 
 def _fire(event: str, **fields: Any) -> None:
     """Write one event to the log, stamped with whatever scope this thread is in."""
+    _trace.append(f"fire:{event}")
     Note.objects.create(text=json.dumps({"event": event, **(_scope.get() or {}), **fields}))
 
 
@@ -90,8 +100,12 @@ def attribute(run: Any, principal: Any) -> Generator[None]:
             "correlation": run.carried.get("correlation_id"),
         }
     )
+    _trace.append("enter")
     try:
         yield
+        # Not in the ``finally``: a generator the caller never exits is closed when it is
+        # collected, which resets the scope too, so only a normal exit reaches this line.
+        _trace.append("leave")
     finally:
         _scope.reset(token)
 
@@ -147,6 +161,8 @@ def test_the_callers_correlation_and_the_principal_reach_the_service_through_the
     # Fails without ``around_run=`` (no scope: actor and correlation absent) and, for the
     # correlation alone, without ``carry=`` (the row carries nothing to restore).
     assert _events()[0] == {"event": "service.done", "actor": user.pk, "correlation": "corr-1"}
+    # Entered before the service ran and left after it: fails when the seam is never exited.
+    assert _trace == ["enter", "fire:service.done", "leave"]
     assert _scope.get() is None
 
 
