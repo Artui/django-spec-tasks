@@ -23,7 +23,7 @@ Everything that can be refused while the caller is still on the stack is, and a 
 | an unknown, missing, mistyped or out-of-choices argument | `InvalidArguments` |
 | a principal the spec's class-level permissions refuse | `NotPermitted` |
 | a parameter named like one of the binding's pool seeds | `ImproperlyConfigured` |
-| a parameter or carried value that JSON would change | `TypeError`, naming the key |
+| a parameter or carried value that JSON would change, or that a JSON column cannot hold (`NaN`, `inf`, a NUL character, half a surrogate pair) | `TypeError`, naming the key |
 
 The check is the kernel's own, run with the binding's `pool_seeds`, so a seed collision is refused here exactly as the worker would refuse it. Nothing it grants crosses to the worker: the worker checks again.
 

@@ -14,7 +14,9 @@ from django_service_specs import (
     Affordance,
     DataclassValidator,
     PermissionCheck,
+    PrincipalUnavailable,
     ServiceConflict,
+    ServiceError,
     ServiceSpec,
     ServiceValidationError,
     Unrestricted,
@@ -194,9 +196,14 @@ def test_an_exception_nobody_declared_is_a_failure_with_its_traceback(
 
 
 def test_a_deactivated_principal_lapses_at_the_worker_s_own_resolver(
-    make_run: Callable[..., SpecRun],
+    make_run: Callable[..., SpecRun], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # An open spec, so no permission check can be what answers: the words name the resolver.
+    # An open spec, so no permission check can answer, and dispatch is never reached: only
+    # the resolver can be what stopped it.
+    dispatched: list[Any] = []
+    monkeypatch.setattr(
+        "django_spec_tasks.worker.run_spec.dispatch", lambda *a, **k: dispatched.append(a)
+    )
     user = User.objects.create(username="left")
     run = make_run(
         ServiceSpec(service=lambda: None, permissions=[Unrestricted()]), actor_pk=str(user.pk)
@@ -208,7 +215,7 @@ def test_a_deactivated_principal_lapses_at_the_worker_s_own_resolver(
     run.refresh_from_db()
     assert run.state == RunState.AUTHORIZATION_LAPSED
     assert run.refusal_class == "PrincipalUnavailable"
-    assert "deactivated" in run.refusal_detail["message"]
+    assert dispatched == []
 
 
 def test_a_resolver_handing_back_a_deactivated_user_is_stopped_by_dispatch(
@@ -241,6 +248,105 @@ def test_a_deleted_principal_lapses(make_run: Callable[..., SpecRun]) -> None:
     run.refresh_from_db()
     assert run.state == RunState.AUTHORIZATION_LAPSED
     assert run.refusal_class == "PrincipalUnavailable"
+
+
+@pytest.mark.parametrize("deactivated", [True, False], ids=["deactivated", "deleted"])
+def test_a_lapsed_principal_s_identifier_stays_out_of_what_a_reader_is_shown(
+    make_run: Callable[..., SpecRun], deactivated: bool
+) -> None:
+    # read_run shows refusal_detail to whoever can_read lets in, and never actor_pk. The
+    # kernel's resolver puts the identifier in its words.
+    user = User.objects.create(username="reader-must-not-learn-this")
+    run = make_run(
+        ServiceSpec(service=lambda: None, permissions=[Unrestricted()]),
+        actor_pk=str(user.pk),
+    )
+    if deactivated:
+        User.objects.filter(pk=user.pk).update(is_active=False)
+    else:
+        user.delete()
+
+    run_spec(str(run.pk))
+
+    run.refresh_from_db()
+    assert run.state == RunState.AUTHORIZATION_LAPSED
+    assert run.refusal_detail["message"] == PrincipalUnavailable.default_message
+
+
+def _raising(error: Exception) -> ServiceSpec:
+    def service() -> None:
+        raise error
+
+    return ServiceSpec(service=service, permissions=[Unrestricted()])
+
+
+@pytest.mark.parametrize(
+    ("words", "stored"),
+    [
+        pytest.param("the order\x00 is closed", "the order is closed", id="nul"),
+        pytest.param("the order\ud800 is closed", "the order? is closed", id="half-a-pair"),
+    ],
+)
+def test_a_refusal_s_message_no_column_could_hold_keeps_its_state_and_its_words(
+    make_run: Callable[..., SpecRun], words: str, stored: str
+) -> None:
+    run = make_run(_raising(ServiceError(words)))
+
+    run_spec(str(run.pk))
+
+    run.refresh_from_db()
+    assert run.state == RunState.REFUSED
+    assert run.refusal_detail["message"] == stored
+
+
+@pytest.mark.parametrize(
+    "value", ["a\x00b", "a\ud800b", float("nan")], ids=["nul", "half-a-pair", "nan"]
+)
+def test_a_refusal_s_detail_no_column_could_store_keeps_its_state_and_its_words(
+    make_run: Callable[..., SpecRun], value: Any
+) -> None:
+    error = ServiceError("the order is closed")
+    error.detail = {"field": value}
+    run = make_run(_raising(error))
+
+    run_spec(str(run.pk))
+
+    run.refresh_from_db()
+    assert run.state == RunState.REFUSED
+    assert run.refusal_detail == {"message": "the order is closed", "errors": None, "schema": None}
+
+
+def test_a_refusal_code_past_its_column_is_clipped_and_not_a_stuck_run(
+    make_run: Callable[..., SpecRun],
+) -> None:
+    error = ServiceError("no")
+    error.code = "x" * 300 + "\x00"
+    run = make_run(_raising(error))
+
+    run_spec(str(run.pk))
+
+    run.refresh_from_db()
+    assert run.state == RunState.REFUSED
+    assert run.refusal_code == "x" * 255
+
+
+@pytest.mark.parametrize(
+    ("words", "stored"),
+    [
+        pytest.param("a bug\x00, somewhere", "a bug, somewhere", id="nul"),
+        pytest.param("a bug\ud800, somewhere", "a bug?, somewhere", id="half-a-pair"),
+    ],
+)
+def test_a_fault_whose_words_no_column_could_hold_is_recorded_without_them(
+    make_run: Callable[..., SpecRun], words: str, stored: str
+) -> None:
+    run = make_run(_raising(RuntimeError(words)))
+
+    run_spec(str(run.pk))
+
+    run.refresh_from_db()
+    assert run.state == RunState.FAILED
+    assert f"RuntimeError: {stored}" in run.traceback
 
 
 def test_a_resolver_with_a_bug_is_a_failure(make_run: Callable[..., SpecRun]) -> None:

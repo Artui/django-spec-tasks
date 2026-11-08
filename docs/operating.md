@@ -27,7 +27,7 @@ A queue may lose a message, so the row is the record and the sweep is how a lost
 
 | Row | Outcome |
 | --- | --- |
-| `PENDING` past its binding's `grace` | the backend is asked again; the claim stops a second run |
+| `PENDING`, its binding's `grace` past the last ask | the backend is asked again; the claim stops a second run |
 | `RUNNING` past `lease_expires_at`, the spec declares `idempotent=True`, `attempts < max_attempts` | back to `PENDING`, and the backend is asked |
 | the same, `attempts >= max_attempts` | `ABANDONED`: a run that keeps killing its worker must not loop |
 | the same, `idempotent` is `False` or undeclared | `ABANDONED` |
@@ -36,6 +36,10 @@ A queue may lose a message, so the row is the record and the sweep is how a lost
 `idempotent` is read from the registered spec when the sweep runs, never from the row, so a spec whose
 declaration changed answers with what it declares now. **Undeclared is not `True`**: a spec that says
 nothing is abandoned, not retried.
+
+`grace` is measured from `asked_at`, the last time a backend was asked for the row: when it was created, requeued
+or re-asked. So a queue that is backed up, or down, gets one more message per `grace`, not one per sweep. Size it to
+how long the queue may fall behind.
 
 A row whose binding this process does not know has no `grace` of its own, so a pending one waits out
 the default (`TaskBinding.grace`'s default of ten minutes) before it is ended. A sweep running on code from
@@ -58,14 +62,17 @@ row. Under `atomic=True` its effects roll back; under `atomic=False` they stand.
 ### Guarantees
 
 - **Every move is a compare-and-swap on `(state, attempts)`.** Two sweeps agree on one transition, and
-  a worker that claimed the row after the sweep read it is not overwritten.
+  a worker that claimed the row after the sweep read it is not overwritten. An ask is conditioned on
+  `asked_at` as well, so two sweeps send one message.
 - **`on_finish` runs for `ABANDONED` and `SPEC_UNAVAILABLE`**, in the transaction with the state write, so
   every terminal state fires it. If it raises, that row's write rolls back, the error is logged and
-  counted in `errors`, and the sweep carries on; the row is answered by the next sweep.
-- **A backend that raises** leaves its row as it was (a requeued row stays `PENDING`) and is counted in
-  `errors`. The sweep asks again next time.
-- **A sweep is bounded.** Rows are taken oldest first, `batch_size` at a time, and `limit` caps how many
-  one sweep looks at.
+  counted in `errors`, and the sweep carries on. The row stays as it was, on every sweep, until the hook
+  stops raising: fix the hook, and the next sweep ends it.
+- **A backend that raises** is counted in `errors`. Its row stays `PENDING` (a requeued one too), and the
+  ask is already stamped, so the sweep asks again once `grace` has passed.
+- **A sweep is bounded, and one binding cannot starve another.** Each binding is walked apart, its lapsed
+  rows before its pending ones, longest waiting first, `batch_size` at a time. `limit` caps how many rows
+  one sweep looks at for one binding, so a dead queue or a broken hook holds back only its own binding.
 
 ## Reading a run
 

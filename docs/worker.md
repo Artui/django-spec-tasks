@@ -88,16 +88,20 @@ never `traceback`, so a fault's words stay where only an operator looks.
 
 `SUCCEEDED` records `kind`, and `output`, which is `present(spec, result)`: what a JSON transport would
 have sent, stamped with `package_version` since it is a contract. `instance_pk` keeps the target's identity.
-`kind` is `"instance"`, `"list"` or `"not_found"`. A required target or row that is not there is a result
-rather than a refusal, so it ends `SUCCEEDED` with `kind="not_found"` and no output, on a selector and on a
-service spec alike. A `ServiceNotFound` a service raises is a refusal: it ends `REFUSED`.
+`kind` is `"instance"`, `"list"` or `"not_found"`. A selector that finds nothing has answered, so it ends
+`SUCCEEDED` with `kind="not_found"` and no output. A service whose target is gone never ran, so it ends
+`REFUSED`, with `kind="not_found"` and `refusal_class="ServiceNotFound"`, as a `ServiceNotFound` the service
+raises itself does: a refund of a deleted order must not read as a refund that happened.
 
 **The bound.** Past `max_output_bytes`, measured as the column writes it, the run ends `OUTPUT_TOO_LARGE`
 with `{"size": ..., "limit": ...}` in `refusal_detail`, and `output` stays null. Under `atomic=True` the work
 rolls back with it, so the caller reads a clean refusal. Under `atomic=False` the work stands, and the state
 says the result was not stored. Output is never truncated.
 
-Output JSON cannot hold, which is a presenter's bug, ends `FAILED`, as any exception nobody declared does.
+Output a JSON column cannot hold, which is a presenter's bug, ends `FAILED`, as any exception nobody declared
+does. That counts `NaN`, `inf`, a NUL character and half a surrogate pair, which Postgres refuses and SQLite
+mostly stores. A refusal keeps its state however it reads: a message and a traceback lose what no text column
+holds, a `code` is clipped to its column, and a detail no column could hold is left out.
 
 ## Progress
 
@@ -124,8 +128,9 @@ call raises. It may not swallow it: with no result to record, a run whose seam s
 `FAILED` rather than `SUCCEEDED` with nothing to show.
 
 `on_finish(run)` runs inside the terminal transaction and reads the row as a reader would. Raising from it is
-a bug in the project: the terminal write rolls back with it, the exception reaches the worker, and the sweep
-answers the run.
+a bug in the project: the terminal write rolls back with it, and the exception reaches the worker. The row
+stays `RUNNING`, and the sweep's own ending calls the same hook, so a hook that always raises keeps the row
+`RUNNING` and counted in the sweep's `errors` until it stops raising.
 
 ## Exceptions the worker does not catch
 

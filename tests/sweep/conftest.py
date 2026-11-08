@@ -66,6 +66,9 @@ def make_run() -> Callable[..., SpecRun]:
     def make(binding: TaskBinding | str, **fields: Any) -> SpecRun:
         name = binding if isinstance(binding, str) else binding.name
         fields.setdefault("spec_name", SPEC)
+        # Enqueue asks when it creates, so an old row was last asked when it was made.
+        if "created_at" in fields:
+            fields.setdefault("asked_at", fields["created_at"])
         return SpecRun.objects.create(binding=name, params={}, **fields)
 
     return make

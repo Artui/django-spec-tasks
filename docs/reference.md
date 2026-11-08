@@ -49,6 +49,10 @@ Registered by the app's config, so a project gets them by listing `"django_spec_
 
 ::: django_spec_tasks.sweep.prune_runs.prune_runs
 
+## Admin
+
+::: django_spec_tasks.admin.SpecRunAdmin
+
 ## Types and the row
 
 ::: django_spec_tasks.models.spec_run.SpecRun

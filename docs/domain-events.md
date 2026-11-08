@@ -76,7 +76,7 @@ leaves neither the event nor the service's work, only a `RUNNING` row for the sw
 from dataclasses import dataclass
 
 from django_domain_events import event, fire
-from django_service_specs import ServiceSpec, Unrestricted
+from django_service_specs import Parameter, Parameters, ServiceSpec, Unrestricted
 
 
 @event
@@ -90,7 +90,12 @@ def refund_order(*, order: str) -> None:
     fire(OrderRefunded(order_id=order))
 
 
-refund = ServiceSpec(service=refund_order, atomic=True, permissions=[Unrestricted()])
+refund = ServiceSpec(
+    service=refund_order,
+    atomic=True,
+    permissions=[Unrestricted()],
+    reads=Parameters.of(Parameter("order", "string", required=True)),
+)
 ```
 
 Under `atomic=False`, `fire()` warns that it ran outside a transaction, as it would anywhere: the event
@@ -101,15 +106,14 @@ A worker has no request, so an event fired there carries no actor and no correla
 seams is enough:
 
 ```python
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from django_domain_events import attributed, current_scope
 from django_spec_tasks import TaskBinding
 
 
 def carry_correlation(actor):
-    correlation = current_scope().correlation_id
-    return {"correlation_id": str(correlation)} if correlation else {}
+    return {"correlation_id": str(current_scope().correlation_id or uuid4())}
 
 
 def attribute(run, principal):
@@ -135,8 +139,9 @@ row and the resolved principal, and is entered before `dispatch` and left after 
 service fires between them has the actor and the correlation id. This is the same shape as
 domain-events' own `AROUND_DELIVERY` hook for receivers.
 
-`attributed` mints a correlation id when it is given none, so a run enqueued with no ambient correlation
-still fires its events under one id of its own.
+`carry_correlation` mints an id when the caller has none, so a run enqueued with no ambient correlation still
+fires every event of the run under one id of its own, the finish event below included. Left to `attributed`,
+which also mints one when it is given none, each seam would get a different id.
 
 ## A run finishing fires an event
 
@@ -171,8 +176,9 @@ What that guarantees:
 - **The sweep fires it for its endings.** A run the sweep ends `ABANDONED`, or `SPEC_UNAVAILABLE` while its
   binding is still registered, calls the same hook, in the transaction of its write, on a row of the same
   shape as the worker's.
-- **A hook that raises takes the write with it.** The event it fired before raising is gone, the run stays
-  `RUNNING`, and the sweep answers it.
+- **A hook that raises takes the write with it.** The event it fired before raising is gone and the run stays
+  `RUNNING`. The sweep's ending calls the same hook, so the run stays there, counted in the sweep's `errors`,
+  until the hook stops raising.
 
 An event fired from `on_finish` is outside `around_run`, so it has no actor from that seam. `announce`
 above takes its correlation from the row.

@@ -57,6 +57,7 @@ REFUSALS = [
     pytest.param("upload", {}, "user", TypeError, "attachment", id="file"),
     pytest.param("uploads", {}, "user", TypeError, "attachments", id="file-array"),
     pytest.param("nested_upload", {}, "user", TypeError, "rows.doc", id="file-in-rows"),
+    pytest.param("object_upload", {}, "user", TypeError, "meta.doc", id="file-in-fields"),
     pytest.param("open", {"order": "7", "note": (1, 2)}, "user", TypeError, "'note'", id="tuple"),
     pytest.param("open", {"order": "7", "note": b"raw"}, "user", TypeError, "'note'", id="bytes"),
     pytest.param(
@@ -161,7 +162,12 @@ class TestARefusalWritesNothing:
                 {"when": decimal.Decimal("1")}, "carried value 'when' is not JSON", id="decimal"
             ),
             pytest.param({"pair": (1, 2)}, "carried value 'pair' changes", id="tuple"),
-            pytest.param({"ratio": float("nan")}, "carried value 'ratio' changes", id="nan"),
+            pytest.param({"ratio": float("nan")}, "carried value 'ratio' is not JSON", id="nan"),
+            pytest.param({"ratio": float("inf")}, "carried value 'ratio' is not JSON", id="inf"),
+            pytest.param({"note": "a\x00b"}, "carried value 'note' is not JSON", id="nul"),
+            pytest.param(
+                {"note": "a\ud800b"}, "carried value 'note' is not JSON", id="half-a-pair"
+            ),
             pytest.param({1: "a"}, "carried value key 1 is not a string", id="int-key"),
         ],
     )

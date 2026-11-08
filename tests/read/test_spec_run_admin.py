@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from inspect import signature
 
 import pytest
 from django.contrib import admin
@@ -91,6 +92,48 @@ def test_the_change_view_shows_the_traceback_and_hides_the_payloads(
 
     assert "triage-me" in content
     assert MARKER not in content
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        {"params__card": "4111"},
+        {"params__card__startswith": "4"},
+        {"params": "{}"},
+        {"carried__tenant": "acme"},
+        {"output__shown__startswith": MARKER[:1]},
+    ],
+    ids=lambda query: next(iter(query)),
+)
+def test_a_hidden_payload_cannot_be_queried_through_the_url(
+    admin_client: Client, run: SpecRun, query: dict[str, str]
+) -> None:
+    # A count of results answers a guess, so a value is recoverable a character at a time by
+    # anyone who may view the list, without ever being shown it.
+    response = admin_client.get(_urls(run)["list"], query)
+
+    assert response.status_code == 400
+
+
+def test_a_column_that_shows_can_still_be_queried_through_the_url(
+    admin_client: Client, run: SpecRun
+) -> None:
+    response = admin_client.get(_urls(run)["list"], {"state__exact": "FAILED"})
+
+    assert response.status_code == 200
+    assert str(run.pk) in response.content.decode()
+
+
+def test_a_subclass_showing_the_payloads_may_query_them_too() -> None:
+    class Showing(SpecRunAdmin):
+        show_payloads = True
+
+    # Django 4.2 takes the lookup and its value; later versions add the request.
+    takes_request = "request" in signature(admin.ModelAdmin.lookup_allowed).parameters
+    rest = ("x", None) if takes_request else ("x",)
+
+    assert Showing(SpecRun, admin.site).lookup_allowed("output__shown", *rest)
+    assert not SpecRunAdmin(SpecRun, admin.site).lookup_allowed("output__shown", *rest)
 
 
 def test_a_change_post_changes_nothing(admin_client: Client, run: SpecRun) -> None:

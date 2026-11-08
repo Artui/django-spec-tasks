@@ -15,7 +15,10 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
-            "--limit", type=int, default=1000, help="The most rows one sweep looks at."
+            "--limit",
+            type=int,
+            default=1000,
+            help="The most rows one sweep looks at for one binding.",
         )
 
     def handle(self, *args: Any, **options: Any) -> None:

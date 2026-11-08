@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 from django.db import connection
+from django.utils import timezone
 from django_service_specs import SelectorSpec, ServiceSpec, SpecRegistry, Unrestricted
 
 from django_spec_tasks.binding.task_binding import TaskBinding
@@ -190,10 +191,12 @@ def test_a_running_run_with_no_lease_is_left_alone(
 
 @pytest.mark.parametrize("state", [RunState.SUCCEEDED, RunState.FAILED])
 def test_a_finished_run_with_an_old_lease_is_left_alone(
-    make_binding: MakeBinding, lapsed: MakeRun, state: RunState
+    make_binding: MakeBinding, make_run: MakeRun, lapsed: MakeRun, state: RunState
 ) -> None:
-    # Names ``state == RUNNING``: a finished run keeps the lease it held.
+    # Names ``state == RUNNING``: a finished run keeps the lease it held. The young pending row
+    # is what makes the sweep walk this binding at all.
     binding = make_binding(idempotent=True)
+    make_run(binding)
     run = lapsed(binding, state=state, finished_at=ago(hours=1))
 
     assert sweep_runs().moved == 0
@@ -390,29 +393,29 @@ class Mover:
     def __init__(self, **changes: Any) -> None:
         self.changes = changes
         self.target: SpecRun | None = None
+        self.seen: list[Any] = []
 
     def __call__(self, run: SpecRun) -> None:
         assert self.target is not None
+        self.seen.append(run.pk)
         SpecRun.objects.filter(pk=self.target.pk).update(**self.changes)
 
 
 def test_a_row_that_moved_since_the_batch_was_read_is_not_overwritten_state(
     make_binding: MakeBinding, lapsed: MakeRun
 ) -> None:
-    # The oldest row's ``on_finish`` runs while the batch holds the younger row as it was.
-    # The younger row finishes meanwhile; the fence's ``state`` is what refuses the sweep.
+    # The first row's ``on_finish`` runs while the batch holds the second as it was. The
+    # second finishes meanwhile; the fence's ``state`` is what refuses the sweep.
     mover = Mover(state=RunState.SUCCEEDED)
-    finished = Finished()
-    oldest = lapsed(make_binding(on_finish=mover), created_at=ago(hours=5))
-    mover.target = lapsed(
-        make_binding(idempotent=True, on_finish=finished), attempts=3, created_at=ago(hours=1)
-    )
+    binding = make_binding(idempotent=True, on_finish=mover)
+    first = lapsed(binding, attempts=3, lease_expires_at=ago(hours=5))
+    mover.target = lapsed(binding, attempts=3)
 
     report = sweep_runs()
 
-    assert reload(oldest).state == RunState.ABANDONED
+    assert reload(first).state == RunState.ABANDONED
     assert reload(mover.target).state == RunState.SUCCEEDED
-    assert finished.seen == []
+    assert mover.seen == [first.pk]
     assert report.abandoned == 1
 
 
@@ -421,18 +424,16 @@ def test_a_row_reclaimed_since_the_batch_was_read_is_not_overwritten_attempts(
 ) -> None:
     # Still ``RUNNING``, but claimed again: only ``attempts`` tells it from the snapshot.
     mover = Mover(attempts=4)
-    finished = Finished()
-    oldest = lapsed(make_binding(on_finish=mover), created_at=ago(hours=5))
-    mover.target = lapsed(
-        make_binding(idempotent=True, on_finish=finished), attempts=3, created_at=ago(hours=1)
-    )
+    binding = make_binding(idempotent=True, on_finish=mover)
+    first = lapsed(binding, attempts=3, lease_expires_at=ago(hours=5))
+    mover.target = lapsed(binding, attempts=3)
 
     sweep_runs()
 
-    assert reload(oldest).state == RunState.ABANDONED
+    assert reload(first).state == RunState.ABANDONED
     row = reload(mover.target)
     assert (row.state, row.attempts) == (RunState.RUNNING, 4)
-    assert finished.seen == []
+    assert mover.seen == [first.pk]
 
 
 def test_a_row_that_finished_since_the_batch_was_read_is_not_requeued(
@@ -441,8 +442,9 @@ def test_a_row_that_finished_since_the_batch_was_read_is_not_requeued(
     # The requeue is fenced as an ending is: a worker that finished the run first wins,
     # and the backend is not asked for a run that is done.
     mover = Mover(state=RunState.SUCCEEDED)
-    lapsed(make_binding(on_finish=mover), created_at=ago(hours=5))
-    mover.target = lapsed(make_binding(idempotent=True), attempts=1, created_at=ago(hours=1))
+    binding = make_binding(idempotent=True, on_finish=mover)
+    lapsed(binding, attempts=3, lease_expires_at=ago(hours=5))
+    mover.target = lapsed(binding, attempts=1)
 
     report = sweep_runs()
 
@@ -452,19 +454,54 @@ def test_a_row_that_finished_since_the_batch_was_read_is_not_requeued(
 
 
 def test_a_pending_row_claimed_since_the_batch_was_read_is_not_ended(
-    make_binding: MakeBinding, make_run: MakeRun, lapsed: MakeRun
+    make_binding: MakeBinding, make_run: MakeRun
 ) -> None:
     mover = Mover(state=RunState.RUNNING)
-    finished = Finished()
-    lapsed(make_binding(on_finish=mover), created_at=ago(hours=5))
-    mover.target = make_run(
-        make_binding(on_finish=finished), spec_name="removed_since", created_at=ago(hours=1)
-    )
+    binding = make_binding(on_finish=mover)
+    first = make_run(binding, spec_name="removed_since", created_at=ago(hours=5))
+    mover.target = make_run(binding, spec_name="removed_since", created_at=ago(hours=1))
 
     sweep_runs()
 
     assert reload(mover.target).state == RunState.RUNNING
-    assert finished.seen == []
+    assert mover.seen == [first.pk]
+
+
+class MovingBackend(RecordingBackend):
+    """A backend that changes the other row while being asked, as a second sweep would."""
+
+    def __init__(self, **changes: Any) -> None:
+        super().__init__()
+        self.changes = changes
+        self.target: SpecRun | None = None
+
+    def enqueue(self, run_id: str) -> None:
+        super().enqueue(run_id)
+        assert self.target is not None
+        SpecRun.objects.filter(pk=self.target.pk).update(**self.changes)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        pytest.param({"asked_at": timezone.now()}, id="asked-by-another-sweep"),
+        pytest.param({"state": RunState.RUNNING}, id="claimed"),
+        pytest.param({"attempts": 1}, id="claimed-and-handed-back"),
+    ],
+)
+def test_a_row_that_moved_since_the_batch_was_read_is_not_asked_for(
+    make_binding: MakeBinding, make_run: MakeRun, changes: dict[str, Any]
+) -> None:
+    # One message from two sweeps racing, and none for a run a worker already has.
+    backend = MovingBackend(**changes)
+    binding = make_binding(backend=backend)
+    first = make_run(binding, created_at=ago(hours=5))
+    backend.target = make_run(binding, created_at=ago(hours=1))
+
+    report = sweep_runs()
+
+    assert backend.asked == [str(first.pk)]
+    assert report.reasked == 1
 
 
 @pytest.mark.parametrize(
@@ -592,8 +629,6 @@ def test_a_limit_bounds_one_sweep_and_takes_the_oldest_first(
 def test_paging_asks_each_row_once_and_does_not_revisit_a_requeued_row(
     make_binding: MakeBinding, lapsed: MakeRun, backend: RecordingBackend
 ) -> None:
-    # A requeued row keeps its old ``created_at`` and so reads as a lost pending run to a
-    # query that starts over: the page cursor is what stops it being asked twice.
     binding = make_binding(idempotent=True)
     runs = [lapsed(binding, created_at=ago(hours=hours)) for hours in (5, 4, 3)]
 
@@ -603,7 +638,20 @@ def test_paging_asks_each_row_once_and_does_not_revisit_a_requeued_row(
     assert (report.requeued, report.reasked) == (3, 0)
 
 
-def test_rows_sharing_a_created_at_are_each_handled_once_across_pages(
+def test_a_requeued_row_is_not_asked_for_again_in_the_same_sweep_with_no_grace(
+    make_binding: MakeBinding, lapsed: MakeRun, backend: RecordingBackend
+) -> None:
+    # Lapsed rows are read first, so a row they send back must not read as a lost one when the
+    # pending rows are read next. Its ask is later than the moment the sweep measures from.
+    run = lapsed(make_binding(idempotent=True, grace=timedelta(0)))
+
+    report = sweep_runs()
+
+    assert backend.asked == [str(run.pk)]
+    assert (report.requeued, report.reasked) == (1, 0)
+
+
+def test_pending_rows_asked_at_one_moment_are_each_handled_once_across_pages(
     make_binding: MakeBinding, make_run: MakeRun, backend: RecordingBackend
 ) -> None:
     binding = make_binding()
@@ -614,6 +662,177 @@ def test_rows_sharing_a_created_at_are_each_handled_once_across_pages(
 
     assert sorted(backend.asked) == sorted(str(run.pk) for run in runs)
     assert report.reasked == 4
+
+
+def test_lapsed_rows_sharing_a_lease_are_each_handled_once_across_pages(
+    make_binding: MakeBinding, lapsed: MakeRun
+) -> None:
+    # A row whose ending fails stays lapsed, so only the cursor keeps it from a second answer.
+    def broken(run: SpecRun) -> None:
+        raise RuntimeError("the project's hook is broken")
+
+    binding = make_binding(on_finish=broken)
+    moment = ago(hours=1)
+    for _ in range(4):
+        lapsed(binding, lease_expires_at=moment)
+
+    report = sweep_runs(batch_size=1)
+
+    assert report.errors == 4
+
+
+def test_a_limit_is_each_binding_s_own(
+    make_binding: MakeBinding, make_run: MakeRun, backend: RecordingBackend
+) -> None:
+    for binding in (make_binding(), make_binding()):
+        for hours in (1, 2, 3):
+            make_run(binding, created_at=ago(hours=hours))
+
+    report = sweep_runs(limit=2)
+
+    assert report.reasked == 4
+
+
+def test_lapsed_rows_are_answered_before_pending_rows_within_a_binding(
+    make_binding: MakeBinding, make_run: MakeRun, lapsed: MakeRun, backend: RecordingBackend
+) -> None:
+    # However old the pending row, a re-ask can be repeated and a dead worker's row cannot wait.
+    binding = make_binding()
+    make_run(binding, created_at=ago(days=3))
+    run = lapsed(binding, created_at=ago(hours=1))
+
+    report = sweep_runs(limit=1)
+
+    assert reload(run).state == RunState.ABANDONED
+    assert backend.asked == []
+    assert report.abandoned == 1
+
+
+def test_the_row_longest_unasked_is_asked_for_first(
+    make_binding: MakeBinding, make_run: MakeRun, backend: RecordingBackend
+) -> None:
+    # Taking the oldest row every time would hold the ones behind it back for good.
+    binding = make_binding(grace=timedelta(0))
+    runs = [make_run(binding, created_at=ago(hours=hours)) for hours in (3, 2, 1)]
+
+    for _ in range(4):
+        sweep_runs(limit=1)
+
+    assert backend.asked == [str(run.pk) for run in (*runs, runs[0])]
+
+
+def test_a_lapsed_row_longest_past_its_lease_is_answered_first(
+    make_binding: MakeBinding, lapsed: MakeRun
+) -> None:
+    binding = make_binding()
+    later = lapsed(binding, lease_expires_at=ago(minutes=1), created_at=ago(hours=5))
+    earlier = lapsed(binding, lease_expires_at=ago(minutes=5), created_at=ago(hours=1))
+
+    sweep_runs(limit=1)
+
+    assert reload(earlier).state == RunState.ABANDONED
+    assert reload(later).state == RunState.RUNNING
+
+
+# --- A grace is measured from the last ask ----------------------------------------------
+
+
+def test_a_row_just_asked_for_waits_out_its_grace_again(
+    make_binding: MakeBinding, make_run: MakeRun, backend: RecordingBackend
+) -> None:
+    # A backed-up queue would otherwise get one more message per row on every sweep.
+    binding = make_binding(grace=timedelta(minutes=10))
+    run = make_run(binding, created_at=ago(hours=1))
+
+    assert sweep_runs().reasked == 1
+    assert sweep_runs().reasked == 0
+    assert backend.asked == [str(run.pk)]
+
+    SpecRun.objects.filter(pk=run.pk).update(asked_at=ago(minutes=11))
+
+    assert sweep_runs().reasked == 1
+    assert backend.asked == [str(run.pk), str(run.pk)]
+
+
+def test_a_requeued_row_waits_out_its_grace_before_it_is_asked_for_again(
+    make_binding: MakeBinding, lapsed: MakeRun, backend: RecordingBackend
+) -> None:
+    run = lapsed(make_binding(idempotent=True), created_at=ago(hours=5))
+
+    assert sweep_runs().requeued == 1
+    assert sweep_runs().reasked == 0
+    assert backend.asked == [str(run.pk)]
+
+
+def test_an_old_row_asked_for_recently_is_left_alone(
+    make_binding: MakeBinding, make_run: MakeRun, backend: RecordingBackend
+) -> None:
+    make_run(make_binding(), created_at=ago(hours=5), asked_at=ago(minutes=1))
+
+    assert sweep_runs().reasked == 0
+    assert backend.asked == []
+
+
+def test_a_row_a_backend_refused_waits_out_its_grace_too(
+    make_binding: MakeBinding, make_run: MakeRun, backend: RecordingBackend
+) -> None:
+    # Stamped before the ask: a queue that is down is not hammered, and the row goes to the
+    # back of the line rather than holding the budget of every sweep until it recovers.
+    run = make_run(make_binding(), created_at=ago(hours=1))
+    backend.refuse.add(str(run.pk))
+
+    assert sweep_runs().errors == 1
+    assert sweep_runs().errors == 0
+
+
+# --- One binding cannot starve another --------------------------------------------------
+
+
+def test_a_binding_with_a_broken_hook_cannot_use_another_binding_s_budget(
+    make_binding: MakeBinding, lapsed: MakeRun
+) -> None:
+    def broken(run: SpecRun) -> None:
+        raise RuntimeError("the project's hook is broken")
+
+    bad = make_binding(on_finish=broken)
+    for hours in (5, 4, 3):
+        lapsed(bad, created_at=ago(hours=hours))
+    run = lapsed(make_binding(), created_at=ago(hours=1))
+
+    report = sweep_runs(limit=3)
+
+    assert reload(run).state == RunState.ABANDONED
+    assert (report.abandoned, report.errors) == (1, 3)
+
+
+def test_a_binding_with_a_dead_queue_cannot_use_another_binding_s_budget(
+    make_binding: MakeBinding, make_run: MakeRun, lapsed: MakeRun, backend: RecordingBackend
+) -> None:
+    bad = make_binding()
+    for hours in (5, 4, 3):
+        backend.refuse.add(str(make_run(bad, created_at=ago(hours=hours)).pk))
+    run = lapsed(make_binding(), created_at=ago(hours=1))
+
+    report = sweep_runs(limit=3)
+
+    assert reload(run).state == RunState.ABANDONED
+    assert (report.abandoned, report.errors) == (1, 3)
+
+
+def test_a_hook_that_always_raises_keeps_its_row_running_and_counted(
+    make_binding: MakeBinding, lapsed: MakeRun
+) -> None:
+    # The sweep calls the same hook the worker did, so no later sweep can end this row until
+    # the hook stops raising. The operating page says so.
+    def broken(run: SpecRun) -> None:
+        raise RuntimeError("the project's hook is broken")
+
+    run = lapsed(make_binding(on_finish=broken))
+
+    for _ in range(3):
+        assert sweep_runs().errors == 1
+
+    assert reload(run).state == RunState.RUNNING
 
 
 def test_a_sweep_with_nothing_to_do_reports_nothing(make_binding: MakeBinding) -> None:

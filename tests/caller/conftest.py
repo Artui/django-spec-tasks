@@ -95,6 +95,15 @@ def build_registry() -> SpecRegistry:
                 Parameter(
                     "rows", "array", items=Parameters.of(Parameter("doc", "file")), required=False
                 ),
+            ),
+        ),
+    )
+    registry.register(
+        "object_upload",
+        ServiceSpec(
+            service=_service,
+            permissions=[Unrestricted()],
+            reads=Parameters.of(
                 Parameter("meta", "object", fields=Parameters.of(Parameter("doc", "file"))),
             ),
         ),

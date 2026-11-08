@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from collections import Counter
 from collections.abc import Iterator
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import cast
 
 from django.db import transaction
@@ -34,7 +34,7 @@ def sweep_runs(*, limit: int = 1000, batch_size: int = 100) -> SweepReport:
 
     | Row | Outcome |
     | --- | --- |
-    | ``PENDING`` past its binding's ``grace`` | the backend is asked again; the claim stops a second run |
+    | ``PENDING``, ``grace`` past its last ask | the backend is asked again; the claim stops a second run |
     | ``RUNNING`` past its lease, spec declares ``idempotent=True``, ``attempts`` to spare | back to ``PENDING`` and the backend is asked |
     | the same, ``attempts >= max_attempts`` | ``ABANDONED``: a poison run must not loop |
     | the same, ``idempotent`` ``False`` or undeclared | ``ABANDONED`` |
@@ -45,23 +45,30 @@ def sweep_runs(*, limit: int = 1000, batch_size: int = 100) -> SweepReport:
     not read as ``True``.
 
     Every transition is a compare-and-swap on ``(state, attempts)``, so two sweeps agree and
-    a worker that claimed the row meanwhile is not overwritten. ``on_finish`` runs for
-    ``ABANDONED`` and ``SPEC_UNAVAILABLE`` in the transaction with the write. A backend or
-    an ``on_finish`` that raises leaves that row as it was and the sweep carries on; the
-    row is answered by the next sweep.
+    a worker that claimed the row meanwhile is not overwritten. An ask is stamped on
+    ``asked_at`` before the backend hears it, conditioned on the value read as well, so two
+    sweeps send one message, and a row waits out its grace again whether or not the backend
+    took it. A backend that raises is counted in ``errors``, and the sweep carries on.
 
-    Rows are taken oldest first by ``created_at``, ``batch_size`` at a time, and ``limit``
-    bounds one sweep.
+    ``on_finish`` runs for ``ABANDONED`` and ``SPEC_UNAVAILABLE`` in the transaction with the
+    write. One that raises takes the write back: it is counted in ``errors``, and the row
+    stays as it was, on every sweep, until the hook stops raising.
+
+    Each binding is walked apart, its lapsed rows first and then its pending ones, longest
+    waiting first, ``batch_size`` at a time, and ``limit`` is its own, so a binding whose
+    queue is dead or whose hook is broken holds back nothing but itself.
 
     Args:
-        limit: The most rows one sweep looks at.
+        limit: The most rows one sweep looks at for one binding.
         batch_size: How many rows are read from the database at once.
 
     Returns:
         What was done, counted by outcome.
     """
     counts: Counter[str] = Counter()
-    for run in _candidates(limit, batch_size):
+    # One moment for the whole sweep: a row this sweep requeues is asked later than it, so it
+    # cannot read as a lost one when the pending rows are read, whatever the grace.
+    for run in _candidates(timezone.now(), limit, batch_size):
         try:
             _answer(run, counts)
         except Exception:
@@ -87,8 +94,9 @@ def _answer(run: SpecRun, counts: Counter[str]) -> None:
         counts["unavailable"] += _end(run, RunState.SPEC_UNAVAILABLE, binding, why)
         return
     if run.state == RunState.PENDING:
-        binding.backend.enqueue(str(run.pk))
-        counts["reasked"] += 1
+        if _stamp_ask(run):
+            binding.backend.enqueue(str(run.pk))
+            counts["reasked"] += 1
         return
     spec = kernel_spec(entry.spec)
     declared = spec.idempotent if isinstance(spec, ServiceSpec) else None
@@ -105,8 +113,20 @@ def _fenced(run: SpecRun) -> QuerySet[SpecRun]:
     return SpecRun.objects.filter(pk=run.pk, state=run.state, attempts=run.attempts)
 
 
+def _stamp_ask(run: SpecRun) -> bool:
+    """Take this row's next ask: a second sweep holding the same read finds nothing to take."""
+    return bool(_fenced(run).filter(asked_at=run.asked_at).update(asked_at=timezone.now()))
+
+
 def _requeue(run: SpecRun) -> bool:
-    return bool(_fenced(run).update(state=RunState.PENDING, claimed_at=None, lease_expires_at=None))
+    return bool(
+        _fenced(run).update(
+            state=RunState.PENDING,
+            claimed_at=None,
+            lease_expires_at=None,
+            asked_at=timezone.now(),
+        )
+    )
 
 
 def _end(
@@ -128,40 +148,42 @@ def _end(
     return True
 
 
-def _candidates(limit: int, batch_size: int) -> Iterator[SpecRun]:
-    """Rows to look at, oldest first, paged by ``(created_at, pk)`` so none is seen twice.
+def _candidates(now: datetime, limit: int, batch_size: int) -> Iterator[SpecRun]:
+    """Rows to look at, one binding at a time, each with ``limit`` of its own.
 
-    A requeued row keeps its old ``created_at`` and so reads as a lost ``PENDING`` run to
-    any query that starts over. The cursor is what stops it being asked a second time.
+    A binding's lapsed rows come first: a re-ask can be repeated, and a dead worker's row has
+    nobody else coming for it.
     """
-    wanted = _wanted()
+    live = SpecRun.objects.filter(state__in=(RunState.PENDING, RunState.RUNNING))
+    for name in sorted(set(live.values_list("binding", flat=True).distinct())):
+        binding = TaskBinding.named(name)
+        grace = _DEFAULT_GRACE if binding is None else binding.grace
+        lapsed = SpecRun.objects.filter(
+            binding=name, state=RunState.RUNNING, lease_expires_at__lt=now
+        )
+        lost = SpecRun.objects.filter(
+            binding=name, state=RunState.PENDING, asked_at__lt=now - grace
+        )
+        remaining = limit
+        for rows, column in ((lapsed, "lease_expires_at"), (lost, "asked_at")):
+            for run in _walk(rows, column, remaining, batch_size):
+                remaining -= 1
+                yield run
+
+
+def _walk(rows: QuerySet[SpecRun], column: str, limit: int, batch_size: int) -> Iterator[SpecRun]:
+    """``rows`` longest waiting first, paged by ``(column, pk)`` so none is seen twice.
+
+    A row whose ending failed stays in ``rows``, and only the cursor moves past it.
+    """
     cursor: Q = Q()
     remaining = limit
     while remaining > 0:
-        batch = list(
-            SpecRun.objects.filter(wanted)
-            .filter(cursor)
-            .order_by("created_at", "pk")[: min(batch_size, remaining)]
-        )
+        batch = list(rows.filter(cursor).order_by(column, "pk")[: min(batch_size, remaining)])
         yield from batch
         if not batch:
             return
         last = batch[-1]
-        cursor = Q(created_at__gt=last.created_at) | Q(created_at=last.created_at, pk__gt=last.pk)
+        moment = getattr(last, column)
+        cursor = Q(**{f"{column}__gt": moment}) | Q(**{column: moment, "pk__gt": last.pk})
         remaining -= len(batch)
-
-
-def _wanted() -> Q:
-    """Lapsed ``RUNNING`` rows, and ``PENDING`` rows past their own binding's grace.
-
-    A grace belongs to a binding, so the filter is built per binding name found on a live
-    row, asking the registry for each. One whose binding is not known takes the default.
-    """
-    now = timezone.now()
-    names = SpecRun.objects.filter(state=RunState.PENDING).values_list("binding", flat=True)
-    lost = Q(pk__in=[])
-    for name in set(names.distinct()):
-        binding = TaskBinding.named(name)
-        grace = _DEFAULT_GRACE if binding is None else binding.grace
-        lost |= Q(binding=name, created_at__lt=now - grace)
-    return Q(state=RunState.PENDING) & lost | Q(state=RunState.RUNNING, lease_expires_at__lt=now)

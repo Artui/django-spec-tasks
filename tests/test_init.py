@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -95,3 +96,13 @@ def test_the_stub_declares_what_the_root_exports() -> None:
         alias.name for node in stub.body if isinstance(node, ast.ImportFrom) for alias in node.names
     }
     assert imported == set(django_spec_tasks.__all__)
+
+
+def test_the_version_bump_starts_from_the_version_the_package_holds() -> None:
+    # bump-my-version searches version.py for current_version and refuses when it is absent,
+    # which would stop the release commit at its last step.
+    pyproject = (Path(django_spec_tasks.__file__).parent.parent / "pyproject.toml").read_text()
+    match = re.search(r'^current_version = "(?P<version>[^"]+)"$', pyproject, re.MULTILINE)
+
+    assert match is not None
+    assert match["version"] == django_spec_tasks.__version__

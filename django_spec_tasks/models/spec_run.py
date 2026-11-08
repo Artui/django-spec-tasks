@@ -46,6 +46,9 @@ class SpecRun(models.Model):
     refusal_detail = models.JSONField(null=True, blank=True, encoder=DjangoJSONEncoder)
     traceback = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now, editable=False)
+    # When a backend was last asked for this row, so a sweep measures a binding's grace from
+    # that ask and a backed-up queue is not sent a message on every sweep.
+    asked_at = models.DateTimeField(default=timezone.now, editable=False)
     finished_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -53,7 +56,7 @@ class SpecRun(models.Model):
         verbose_name_plural = "spec runs"
         indexes = [
             models.Index(fields=["state", "lease_expires_at"], name="spec_tasks_state_lease_idx"),
-            models.Index(fields=["state", "created_at"], name="spec_tasks_state_created_idx"),
+            models.Index(fields=["state", "asked_at"], name="spec_tasks_state_asked_idx"),
             models.Index(fields=["state", "finished_at"], name="spec_tasks_state_finished_idx"),
         ]
 

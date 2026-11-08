@@ -41,6 +41,7 @@ def test_the_columns_are_the_call_and_the_queue_s_bookkeeping() -> None:
         "refusal_detail",
         "traceback",
         "created_at",
+        "asked_at",
         "finished_at",
     }
 
@@ -104,7 +105,7 @@ def test_the_sweep_and_prune_indexes_exist_leading_on_state() -> None:
     indexed = {tuple(c["columns"]) for c in constraints.values() if c["index"]}
     assert {
         ("state", "lease_expires_at"),
-        ("state", "created_at"),
+        ("state", "asked_at"),
         ("state", "finished_at"),
     } <= indexed
 

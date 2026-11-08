@@ -34,13 +34,16 @@ class TaskBinding:
             check agrees between them.
         lease: How long a claimed run may take. Sized to the binding's longest run: a
             worker past it is refused at its terminal write.
-        grace: How long a ``PENDING`` row waits before the sweep asks the backend again.
+        grace: How long a ``PENDING`` row waits, from the last time a backend was asked for
+            it, before the sweep asks again. Sized to how long the queue may back up: each
+            ask past it is one more message.
         max_attempts: How many claims an idempotent run gets before it is abandoned.
         max_output_bytes: Past this, a run ends ``OUTPUT_TOO_LARGE``. Output is never
             truncated.
         can_read: ``(principal, run) -> bool``, consulted beside the run's owner.
         progress_using: A database alias progress is written through, which is what
-            makes it visible during an ``atomic=True`` run.
+            makes it visible during an ``atomic=True`` run. A second connection to the same
+            database: on any other it finds no row, and writes nothing.
         carry: ``(actor) -> JSON mapping``, recorded on the row at enqueue and handed
             to the call context in both processes.
         around_run: ``(run, principal) -> context manager`` around ``dispatch`` and

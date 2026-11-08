@@ -94,6 +94,10 @@ class Migration(migrations.Migration):
                     "created_at",
                     models.DateTimeField(default=django.utils.timezone.now, editable=False),
                 ),
+                (
+                    "asked_at",
+                    models.DateTimeField(default=django.utils.timezone.now, editable=False),
+                ),
                 ("finished_at", models.DateTimeField(blank=True, null=True)),
             ],
             options={
@@ -105,8 +109,8 @@ class Migration(migrations.Migration):
                         name="spec_tasks_state_lease_idx",
                     ),
                     models.Index(
-                        fields=["state", "created_at"],
-                        name="spec_tasks_state_created_idx",
+                        fields=["state", "asked_at"],
+                        name="spec_tasks_state_asked_idx",
                     ),
                     models.Index(
                         fields=["state", "finished_at"],

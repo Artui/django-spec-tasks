@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import traceback
 from contextlib import nullcontext
-from typing import Any
+from typing import Any, cast
 
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 from django.utils import timezone
 from django_service_specs import (
     DispatchResult,
+    PrincipalUnavailable,
+    ServiceNotFound,
     ServiceSpec,
     build_call_context,
     dispatch,
@@ -22,12 +23,15 @@ from django_service_specs import (
 
 from django_spec_tasks.binding.task_binding import TaskBinding
 from django_spec_tasks.models.spec_run import SpecRun
+from django_spec_tasks.models.storable_json import storable_json
 from django_spec_tasks.types.run_state import RunState
 from django_spec_tasks.version import __version__
 from django_spec_tasks.worker.row_progress import RowProgress
 from django_spec_tasks.worker.run_state_for import run_state_for
 
 logger = logging.getLogger(__name__)
+
+_REFUSAL_CODE_LENGTH: int = cast(Any, SpecRun._meta.get_field("refusal_code")).max_length
 
 
 def run_spec(run_id: str) -> None:
@@ -41,7 +45,9 @@ def run_spec(run_id: str) -> None:
     ``dispatch`` and ``present``, so the worker re-checks everything enqueue checked and the
     Validator runs for the first time. The row ends in the state
     [`run_state_for`][django_spec_tasks.worker.run_state_for.run_state_for] gives what was
-    raised, or in ``SUCCEEDED`` with what was presented, or in ``OUTPUT_TOO_LARGE``.
+    raised, or in ``SUCCEEDED`` with what was presented, or in ``OUTPUT_TOO_LARGE``. A service
+    whose target is gone never ran, and ends ``REFUSED``; a selector finding nothing has
+    answered, and ends ``SUCCEEDED``, each with ``kind="not_found"``.
 
     **Under** ``atomic=True`` one transaction holds ``around_run``, ``dispatch``, ``present``,
     the terminal write and ``on_finish``, so the service's work and the row's state commit as
@@ -162,13 +168,19 @@ def _call(run: SpecRun, binding: TaskBinding, spec: Any, principal: Any) -> dict
             raise RuntimeError(
                 "around_run swallowed what the run raised, so there is no result to record."
             )
-        return _ending_of(binding, *finished)
+        return _ending_of(binding, spec, *finished)
     except Exception as error:
         return _ending_for(error)
 
 
-def _ending_of(binding: TaskBinding, result: DispatchResult, output: Any) -> dict[str, Any]:
+def _ending_of(
+    binding: TaskBinding, spec: Any, result: DispatchResult, output: Any
+) -> dict[str, Any]:
     """The columns of a call that returned: its output, or the refusal to store it."""
+    # The kernel answers a service's missing target with a result rather than raising, and
+    # the service did not run, so what is recorded is the refusal a transport would answer.
+    if result.kind == "not_found" and isinstance(spec, ServiceSpec):
+        return {**_ending_for(ServiceNotFound()), "kind": result.kind}
     # Measured as the column writes it, or the bound and the write would disagree.
     size = len(_encoded(output).encode())
     if size > binding.max_output_bytes:
@@ -193,11 +205,12 @@ def _ending_for(error: Exception) -> dict[str, Any]:
     """
     state = run_state_for(error)
     if state == RunState.FAILED:
-        return {"state": state, "traceback": "".join(traceback.format_exception(error))}
+        return {"state": state, "traceback": _storable("".join(traceback.format_exception(error)))}
+    code = getattr(error, "code", None)
     return {
         "state": state,
         "refusal_class": type(error).__name__,
-        "refusal_code": getattr(error, "code", None),
+        "refusal_code": None if code is None else _storable(str(code))[:_REFUSAL_CODE_LENGTH],
         "refusal_detail": _refusal_detail(error),
     }
 
@@ -207,8 +220,14 @@ def _refusal_detail(error: Exception) -> dict[str, Any]:
 
     A project's own refusal may carry anything in those, and a detail no column could store
     must not turn a refusal into a write that raises. So it keeps its words and its state.
+
+    ``PrincipalUnavailable`` answers in its class's words alone. The kernel's resolver names
+    the identifier in its own, and a reader of this column is told nothing of ``actor_pk``.
     """
-    message = str(error)
+    if isinstance(error, PrincipalUnavailable):
+        message = str(error.default_message)
+    else:
+        message = _storable(str(error))
     detail = {
         "message": message,
         "errors": getattr(error, "detail", None),
@@ -222,13 +241,18 @@ def _refusal_detail(error: Exception) -> dict[str, Any]:
 
 
 def _encoded(value: Any) -> str:
-    """``value`` as the JSON columns write it, refusing a float they could not store.
+    """``value`` as the JSON columns write it, refusing what they could not store.
 
-    ``NaN`` passes the encoder and fails the write, past every handler here, so it is
-    refused where a refusal can still be recorded
-    (test_a_float_json_cannot_write_is_a_failure_and_not_a_stuck_run).
+    Each fails the write past every handler here, so it is refused where a refusal can still
+    be recorded (test_a_float_json_cannot_write_is_a_failure_and_not_a_stuck_run,
+    test_output_a_json_column_cannot_hold_is_a_failure_and_not_a_stuck_run).
     """
-    return json.dumps(value, cls=DjangoJSONEncoder, allow_nan=False)
+    return storable_json(value, encoder=DjangoJSONEncoder)
+
+
+def _storable(text: str) -> str:
+    """``text`` as every text column holds it, without a NUL or half a surrogate pair."""
+    return text.replace("\x00", "").encode(errors="replace").decode()
 
 
 def _unavailable(why: str) -> dict[str, Any]:

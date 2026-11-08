@@ -14,6 +14,7 @@ from django_service_specs import (
 
 from django_spec_tasks.binding.task_binding import TaskBinding
 from django_spec_tasks.models.spec_run import SpecRun
+from django_spec_tasks.models.storable_json import storable_json
 from django_spec_tasks.types.run_state import RunState
 
 
@@ -116,13 +117,14 @@ def _require_json_round_trip(values: Mapping[str, Any], label: str) -> None:
 
     A queue stores JSON, and what it hands a worker is what survived: a tuple comes back a
     list, bytes a string, an integer key a string. Django Tasks accepts some of those
-    without complaint, so a backend's own gate is not this check.
+    without complaint, so a backend's own gate is not this check. ``inf``, a NUL and half a
+    surrogate pair survive the round trip and fail the write, where ``TypeError`` is promised.
     """
     for key, value in values.items():
         if not isinstance(key, str):
             raise TypeError(f"The {label} key {key!r} is not a string, and JSON keys are.")
         try:
-            restored = json.loads(json.dumps(value))
+            restored = json.loads(storable_json(value))
         except (TypeError, ValueError) as error:
             raise TypeError(f"The {label} {key!r} is not JSON: {error}") from error
         if restored != value:

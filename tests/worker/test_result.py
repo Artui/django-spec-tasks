@@ -171,6 +171,61 @@ def test_a_float_json_cannot_write_is_a_failure_and_not_a_stuck_run(
     assert "ValueError" in run.traceback
 
 
+@pytest.mark.parametrize("atomic", [True, False])
+@pytest.mark.parametrize(
+    "output",
+    [
+        pytest.param({"text": "a\x00b"}, id="in-a-value"),
+        pytest.param({"a\x00b": 1}, id="in-a-key"),
+        pytest.param({"text": "\\\x00"}, id="after-a-backslash"),
+        pytest.param({"text": "a\ud800b"}, id="half-a-surrogate-pair"),
+    ],
+)
+def test_output_a_json_column_cannot_hold_is_a_failure_and_not_a_stuck_run(
+    make_run: Callable[..., SpecRun], output: Any, atomic: bool
+) -> None:
+    # SQLite stores one and Postgres raises at the terminal write, past every handler, which
+    # leaves the row RUNNING with its work committed under atomic=False.
+    run = make_run(_service_returning(output, atomic=atomic))
+
+    run_spec(str(run.pk))
+
+    run.refresh_from_db()
+    assert run.state == RunState.FAILED
+    assert "ValueError" in run.traceback
+    assert run.output is None
+
+
+@pytest.mark.parametrize(
+    "text", ["\\u0000", "\\\\u0000", "\\\\\\u0000x", "\\ud800", "a\U0001f600b"]
+)
+def test_text_that_only_reads_like_something_unstorable_is_stored(
+    make_run: Callable[..., SpecRun], text: str
+) -> None:
+    # A backslash followed by the letters, or a whole surrogate pair: their JSON holds the same
+    # characters, and every database stores them. A bare substring test refuses them.
+    run = make_run(_service_returning({"text": text}))
+
+    run_spec(str(run.pk))
+
+    run.refresh_from_db()
+    assert run.state == RunState.SUCCEEDED
+    assert run.output == {"text": text}
+
+
+def test_a_surrogate_pair_beside_a_value_only_the_encoder_can_write_is_stored(
+    make_run: Callable[..., SpecRun],
+) -> None:
+    # Telling a pair from half of one encodes the value a second time, with the same encoder.
+    run = make_run(_service_returning({"total": Decimal("1.50"), "text": "\U0001f600"}))
+
+    run_spec(str(run.pk))
+
+    run.refresh_from_db()
+    assert run.state == RunState.SUCCEEDED
+    assert run.output == {"total": "1.50", "text": "\U0001f600"}
+
+
 def test_a_selector_finding_nothing_is_a_result(make_run: Callable[..., SpecRun]) -> None:
     spec = SelectorSpec(
         kind=SelectorKind.RETRIEVE, selector=lambda: None, permissions=[Unrestricted()]
@@ -185,22 +240,34 @@ def test_a_selector_finding_nothing_is_a_result(make_run: Callable[..., SpecRun]
     assert run.output is None
 
 
-def test_a_service_whose_target_is_gone_is_a_result_too(make_run: Callable[..., SpecRun]) -> None:
+@pytest.mark.parametrize("atomic", [True, False])
+def test_a_service_whose_target_is_gone_is_refused_and_never_reads_as_succeeded(
+    make_run: Callable[..., SpecRun], atomic: bool
+) -> None:
+    # The kernel answers a missing target with a result rather than raising, and the service
+    # never ran, so a refund of a deleted order must not read as a refund that happened.
     called: list[bool] = []
+    finished: list[str] = []
     target = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: None)
     spec = ServiceSpec(
         service=lambda: called.append(True),
         instance_selector_spec=target,
         permissions=[Unrestricted()],
+        atomic=atomic,
     )
-    run = make_run(spec)
+    run = make_run(spec, on_finish=lambda row: finished.append(row.state))
 
     run_spec(str(run.pk))
 
     run.refresh_from_db()
     assert called == []
-    assert run.state == RunState.SUCCEEDED
+    assert run.state == RunState.REFUSED
     assert run.kind == "not_found"
+    assert run.output is None
+    assert run.refusal_class == "ServiceNotFound"
+    assert run.refusal_detail["message"]
+    assert run.finished_at is not None
+    assert finished == [RunState.REFUSED]
 
 
 def test_a_list_is_recorded_as_one(make_run: Callable[..., SpecRun]) -> None:
