@@ -168,6 +168,7 @@ class TestARefusalWritesNothing:
             pytest.param(
                 {"note": "a\ud800b"}, "carried value 'note' is not JSON", id="half-a-pair"
             ),
+            pytest.param({"k\x00": "a"}, "holding a NUL", id="nul-in-a-key"),
             pytest.param({1: "a"}, "carried value key 1 is not a string", id="int-key"),
         ],
     )

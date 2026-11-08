@@ -124,6 +124,7 @@ def _require_json_round_trip(values: Mapping[str, Any], label: str) -> None:
         if not isinstance(key, str):
             raise TypeError(f"The {label} key {key!r} is not a string, and JSON keys are.")
         try:
+            storable_json(key)
             restored = json.loads(storable_json(value))
         except (TypeError, ValueError) as error:
             raise TypeError(f"The {label} {key!r} is not JSON: {error}") from error

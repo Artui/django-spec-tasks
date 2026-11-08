@@ -60,8 +60,9 @@ def run_spec(run_id: str) -> None:
     transaction back: a worker that lost its claim cannot commit.
 
     Only an ``Exception`` is an ending. A ``BaseException`` is the worker dying, and passes
-    through untouched, as does anything ``on_finish`` raises: both leave the row ``RUNNING``
-    for the sweep to answer.
+    through untouched, as does anything ``on_finish`` raises: both leave the row ``RUNNING``.
+    The sweep answers a dead worker's. It calls the same hook, so a hook that always raises
+    keeps its row ``RUNNING`` until it stops raising.
     """
     # A read before the claim, because the claim's lease is the binding's and the row names
     # the binding. It is what makes a redelivered message one query
