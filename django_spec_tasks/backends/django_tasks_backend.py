@@ -7,6 +7,8 @@ try:
 except ImportError:
     from django_tasks import task
 
+from django_spec_tasks.worker.run_spec import run_spec
+
 
 @task
 def _run_spec(run_id: str) -> None:
@@ -19,10 +21,6 @@ def _run_spec(run_id: str) -> None:
     since a returned frozen dataclass fails the task after the work has committed, and the
     outcome is on the run's row.
     """
-    # Local only until ``worker/`` is on this branch's base; it belongs at the top of the
-    # module once it is, and the ``ty: ignore`` below goes with it.
-    from django_spec_tasks.worker.run_spec import run_spec  # ty: ignore[import-not-found]
-
     run_spec(run_id)
 
 

@@ -15,6 +15,7 @@ from django_spec_tasks.binding.task_binding import TaskBinding
 from django_spec_tasks.models.spec_run import SpecRun
 from django_spec_tasks.types.run_state import RunState
 from django_spec_tasks.types.sweep_report import SweepReport
+from django_spec_tasks.version import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -76,9 +77,14 @@ def _answer(run: SpecRun, counts: Counter[str]) -> None:
     raises afterwards is an error beside a requeue that did happen.
     """
     binding = TaskBinding.named(run.binding)
-    entry = None if binding is None else binding.registry.get(run.spec_name)
-    if binding is None or entry is None:
-        counts["unavailable"] += _end(run, RunState.SPEC_UNAVAILABLE, binding)
+    if binding is None:
+        why = f"No binding named {run.binding!r} is registered."
+        counts["unavailable"] += _end(run, RunState.SPEC_UNAVAILABLE, None, why)
+        return
+    entry = binding.registry.get(run.spec_name)
+    if entry is None:
+        why = f"No spec named {run.spec_name!r} on this binding."
+        counts["unavailable"] += _end(run, RunState.SPEC_UNAVAILABLE, binding, why)
         return
     if run.state == RunState.PENDING:
         binding.backend.enqueue(str(run.pk))
@@ -103,9 +109,18 @@ def _requeue(run: SpecRun) -> bool:
     return bool(_fenced(run).update(state=RunState.PENDING, claimed_at=None, lease_expires_at=None))
 
 
-def _end(run: SpecRun, state: RunState, binding: TaskBinding | None) -> bool:
+def _end(
+    run: SpecRun, state: RunState, binding: TaskBinding | None, why: str | None = None
+) -> bool:
+    """Write a terminal state as the worker writes one, so a reader cannot tell who did."""
     with transaction.atomic():
-        if not _fenced(run).update(state=state, finished_at=timezone.now()):
+        written = _fenced(run).update(
+            state=state,
+            finished_at=timezone.now(),
+            package_version=__version__,
+            refusal_detail=None if why is None else {"message": why},
+        )
+        if not written:
             return False
         if binding is not None and binding.on_finish is not None:
             run.refresh_from_db()

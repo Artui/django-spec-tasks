@@ -11,6 +11,8 @@ from django_spec_tasks.types.sweep_report import SweepReport as SweepReport
 from django_spec_tasks.types.task_backend import TaskBackend as TaskBackend
 from django_spec_tasks.types.terminal_states import TERMINAL_STATES as TERMINAL_STATES
 from django_spec_tasks.version import __version__ as __version__
+from django_spec_tasks.worker.run_spec import run_spec as run_spec
+from django_spec_tasks.worker.run_state_for import run_state_for as run_state_for
 
 __all__ = [
     "TERMINAL_STATES",
@@ -24,6 +26,8 @@ __all__ = [
     "enqueue",
     "prune_runs",
     "read_run",
+    "run_spec",
+    "run_state_for",
     "state_of",
     "sweep_runs",
 ]

@@ -79,4 +79,5 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Backends: backends.md
+  - Worker: worker.md
   - Operating: operating.md

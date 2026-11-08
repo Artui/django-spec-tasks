@@ -14,6 +14,8 @@ from django_spec_tasks.binding.task_binding import TaskBinding
 from django_spec_tasks.models.spec_run import SpecRun
 from django_spec_tasks.sweep.sweep_runs import sweep_runs
 from django_spec_tasks.types.run_state import RunState
+from django_spec_tasks.version import __version__
+from django_spec_tasks.worker.run_spec import run_spec
 from tests.sweep.conftest import SPEC, RecordingBackend, ago, ahead, reload, spec_declaring
 
 pytestmark = pytest.mark.django_db
@@ -308,6 +310,50 @@ def test_a_lapsed_run_whose_binding_is_gone_is_unavailable(lapsed: MakeRun) -> N
     assert report.unavailable == 1
 
 
+@pytest.mark.parametrize(
+    "where", [{"binding": "never-registered"}, {"spec_name": "removed_since"}], ids=str
+)
+def test_the_sweep_and_the_worker_end_an_unavailable_run_alike(
+    make_binding: MakeBinding, make_run: MakeRun, lapsed: MakeRun, where: dict[str, str]
+) -> None:
+    # Two writers of one state, and a reader cannot tell which wrote it.
+    binding = where.get("binding", make_binding())
+    fields = {"spec_name": where.get("spec_name", SPEC)}
+    by_worker = make_run(binding, **fields)
+    by_sweep = lapsed(binding, **fields)
+
+    run_spec(str(by_worker.pk))
+    sweep_runs()
+
+    swept, worked = reload(by_sweep), reload(by_worker)
+    assert swept.state == worked.state == RunState.SPEC_UNAVAILABLE
+    assert swept.refusal_detail == worked.refusal_detail
+    assert list(where.values())[0] in swept.refusal_detail["message"]
+
+
+@pytest.mark.parametrize(
+    ("idempotent", "fields", "state"),
+    [
+        (False, {}, RunState.ABANDONED),
+        (True, {"spec_name": "removed_since"}, RunState.SPEC_UNAVAILABLE),
+    ],
+)
+def test_a_row_the_sweep_ends_carries_the_package_version(
+    make_binding: MakeBinding,
+    lapsed: MakeRun,
+    idempotent: bool,
+    fields: dict[str, str],
+    state: RunState,
+) -> None:
+    run = lapsed(make_binding(idempotent=idempotent), **fields)
+
+    sweep_runs()
+
+    row = reload(run)
+    assert row.state == state
+    assert row.package_version == __version__
+
+
 def test_a_pending_run_whose_binding_is_gone_waits_out_the_default_grace(
     make_run: MakeRun,
 ) -> None:
@@ -421,21 +467,44 @@ def test_a_pending_row_claimed_since_the_batch_was_read_is_not_ended(
     assert finished.seen == []
 
 
+@pytest.mark.parametrize(
+    ("idempotent", "state", "ends", "asked"),
+    [(False, RunState.ABANDONED, 1, 0), (True, RunState.PENDING, 0, 1)],
+)
 def test_a_workers_late_terminal_write_after_the_sweep_moved_the_row_is_refused(
-    make_binding: MakeBinding, lapsed: MakeRun
+    make_run: MakeRun,
+    backend: RecordingBackend,
+    idempotent: bool,
+    state: RunState,
+    ends: int,
+    asked: int,
 ) -> None:
-    # The worker's own fence is its lane's to test against its code; this holds the sweep's
-    # side of it with a write of the same shape: ``state=RUNNING, attempts=n``.
-    binding = make_binding()
-    run = lapsed(binding, attempts=2)
-    sweep_runs()
+    # The real worker and the real sweep. The lease runs out while the service works and the
+    # sweep answers the row, so what the worker writes as it returns is the late write.
+    def service() -> str:
+        SpecRun.objects.filter(state=RunState.RUNNING).update(lease_expires_at=ago(minutes=1))
+        sweep_runs()
+        return "too late"
 
-    written = SpecRun.objects.filter(pk=run.pk, state=RunState.RUNNING, attempts=2).update(
-        state=RunState.SUCCEEDED
+    registry = SpecRegistry()
+    registry.register(
+        SPEC,
+        ServiceSpec(
+            service=service, permissions=[Unrestricted()], idempotent=idempotent, atomic=False
+        ),
     )
+    finished = Finished()
+    binding = TaskBinding(name="late", registry=registry, backend=backend, on_finish=finished)
+    run = make_run(binding)
 
-    assert written == 0
-    assert reload(run).state == RunState.ABANDONED
+    run_spec(str(run.pk))
+
+    row = reload(run)
+    assert row.state == state
+    assert row.output is None
+    assert row.kind is None
+    assert len(finished.seen) == ends
+    assert len(backend.asked) == asked
 
 
 # --- Errors in a row do not stop the sweep ----------------------------------------------

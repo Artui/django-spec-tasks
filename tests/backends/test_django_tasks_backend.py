@@ -132,7 +132,6 @@ class TestEndToEnd:
         tasks: Callable[..., Any],
         django_capture_on_commit_callbacks: Callable[..., Any],
     ) -> None:
-        pytest.importorskip("django_spec_tasks.worker.run_spec")
         from tests.testapp.models import Note
 
         tasks(default=_IMMEDIATE)

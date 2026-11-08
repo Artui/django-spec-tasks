@@ -9,6 +9,7 @@ from django_spec_tasks.types.sweep_report import SweepReport
 from django_spec_tasks.types.task_backend import TaskBackend
 from django_spec_tasks.types.terminal_states import TERMINAL_STATES
 from django_spec_tasks.version import __version__
+from django_spec_tasks.worker.run_state_for import run_state_for
 
 # Served on first attribute access rather than imported here. Each of these reaches
 # the model layer when its module is imported, and Django imports this package while
@@ -20,6 +21,7 @@ _LAZY_EXPORTS: dict[str, str] = {
     "enqueue": "django_spec_tasks.caller.enqueue",
     "prune_runs": "django_spec_tasks.sweep.prune_runs",
     "read_run": "django_spec_tasks.read.read_run",
+    "run_spec": "django_spec_tasks.worker.run_spec",
     "state_of": "django_spec_tasks.read.state_of",
     "sweep_runs": "django_spec_tasks.sweep.sweep_runs",
 }
@@ -36,6 +38,8 @@ __all__ = [
     "enqueue",
     "prune_runs",
     "read_run",
+    "run_spec",
+    "run_state_for",
     "state_of",
     "sweep_runs",
 ]

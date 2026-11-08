@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from celery import shared_task
 
+from django_spec_tasks.worker.run_spec import run_spec
+
 
 @shared_task(name="django_spec_tasks.run_spec", ignore_result=True)
 def _run_spec(run_id: str) -> None:
@@ -17,10 +19,6 @@ def _run_spec(run_id: str) -> None:
 
     Returns ``None`` and ignores its result: the outcome is on the run's row.
     """
-    # Local only until ``worker/`` is on this branch's base; it belongs at the top of the
-    # module once it is, and the ``ty: ignore`` below goes with it.
-    from django_spec_tasks.worker.run_spec import run_spec  # ty: ignore[import-not-found]
-
     run_spec(run_id)
 
 

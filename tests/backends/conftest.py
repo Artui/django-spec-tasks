@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Callable, Iterator
 from contextlib import ExitStack
-from types import ModuleType
 from typing import Any
 from unittest import mock
 
@@ -13,22 +11,15 @@ import pytest
 from asgiref.local import Local
 from django.test.utils import override_settings
 
-_WORKER = "django_spec_tasks.worker"
-_ENTRY = "django_spec_tasks.worker.run_spec"
+from django_spec_tasks.backends import celery_backend, django_tasks_backend
 
 
 @pytest.fixture
 def run_spec(monkeypatch: pytest.MonkeyPatch) -> mock.Mock:
-    """The ``run_spec`` a task body calls, replaced where the body looks it up.
-
-    Installed as modules rather than patched by dotted path, so these tests do not need the
-    worker's package to exist to name it, and read the same once it does.
-    """
+    """The ``run_spec`` a task body calls, replaced where each body looks it up."""
     entry = mock.Mock(name="run_spec")
-    for name, attributes in ((_WORKER, {}), (_ENTRY, {"run_spec": entry})):
-        module = ModuleType(name)
-        module.__dict__.update(attributes)
-        monkeypatch.setitem(sys.modules, name, module)
+    monkeypatch.setattr(celery_backend, "run_spec", entry)
+    monkeypatch.setattr(django_tasks_backend, "run_spec", entry)
     return entry
 
 
