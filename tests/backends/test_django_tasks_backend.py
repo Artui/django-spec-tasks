@@ -16,10 +16,10 @@ from django_service_specs import SpecRegistry
 from django_spec_tasks.backends import django_tasks_backend
 from django_spec_tasks.backends.django_tasks_backend import DjangoTasksBackend
 from django_spec_tasks.binding.task_binding import TaskBinding
-from django_spec_tasks.enqueue.enqueue import enqueue
+from django_spec_tasks.caller.enqueue import enqueue
 from django_spec_tasks.models.spec_run import SpecRun
 from django_spec_tasks.types.run_state import RunState
-from tests.enqueue.conftest import build_registry
+from tests.caller.conftest import build_registry
 
 _CORE = importlib.util.find_spec("django.tasks") is not None
 _FRAMEWORK = "django.tasks" if _CORE else "django_tasks"

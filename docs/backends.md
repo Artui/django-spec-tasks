@@ -3,7 +3,7 @@
 `enqueue` is the caller's half. A backend is the other: it asks a queue to call the worker with a run's id.
 
 ```python
-from django_spec_tasks.enqueue.enqueue import enqueue
+from django_spec_tasks import enqueue
 
 run_id = enqueue(orders, "refund_order", {"order": "7"}, actor=request.user)
 ```

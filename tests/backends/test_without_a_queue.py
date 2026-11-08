@@ -20,7 +20,7 @@ for name in ("celery", "django_tasks"):
 import django
 django.setup()
 import django_spec_tasks
-from django_spec_tasks.enqueue.enqueue import enqueue
+from django_spec_tasks.caller.enqueue import enqueue
 loaded = sorted(m for m in sys.modules if m.startswith("django_spec_tasks.backends"))
 print(loaded)
 """

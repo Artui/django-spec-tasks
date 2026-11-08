@@ -15,6 +15,7 @@ from django_spec_tasks.version import __version__
 # same names, and their static types come from __init__.pyi.
 _LAZY_EXPORTS: dict[str, str] = {
     "SpecRun": "django_spec_tasks.models.spec_run",
+    "enqueue": "django_spec_tasks.caller.enqueue",
 }
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "TaskBackend",
     "TaskBinding",
     "__version__",
+    "enqueue",
 ]
 
 

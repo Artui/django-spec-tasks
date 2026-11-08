@@ -11,8 +11,8 @@ from celery.app.task import Task
 from django_spec_tasks.backends import celery_backend
 from django_spec_tasks.backends.celery_backend import CeleryBackend
 from django_spec_tasks.binding.task_binding import TaskBinding
-from django_spec_tasks.enqueue.enqueue import enqueue
-from tests.enqueue.conftest import build_registry
+from django_spec_tasks.caller.enqueue import enqueue
+from tests.caller.conftest import build_registry
 
 NAME = "django_spec_tasks.run_spec"
 

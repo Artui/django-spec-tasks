@@ -44,6 +44,35 @@ def test_a_lazy_export_is_the_object_its_leaf_holds() -> None:
     assert django_spec_tasks.SpecRun is SpecRun
 
 
+def test_no_export_shares_its_name_with_a_submodule() -> None:
+    # Importing a submodule binds it on the package, and __getattr__ runs only for a name
+    # that is absent, so a lazy export named after a submodule answers with the module
+    # once anything has imported the leaf: the answer depends on import order.
+    package = Path(django_spec_tasks.__file__).parent
+    children = {path.stem for path in package.iterdir() if not path.name.startswith("__")}
+    assert children.isdisjoint(django_spec_tasks.__all__)
+
+
+@pytest.mark.parametrize("name, leaf", sorted(django_spec_tasks._LAZY_EXPORTS.items()))
+def test_a_lazy_export_is_the_same_object_whichever_import_comes_first(
+    name: str, leaf: str
+) -> None:
+    # In a fresh process, because this one has already imported every leaf.
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import django, importlib; django.setup(); "
+            f"leaf = importlib.import_module({leaf!r}).{name}; "
+            f"from django_spec_tasks import {name} as root; "
+            "assert root is leaf, root",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
 def test_an_unknown_name_raises_attribute_error_naming_it() -> None:
     with pytest.raises(AttributeError, match="no_such_name"):
         _ = django_spec_tasks.no_such_name

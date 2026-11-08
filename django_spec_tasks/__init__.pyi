@@ -1,4 +1,5 @@
 from django_spec_tasks.binding.task_binding import TaskBinding as TaskBinding
+from django_spec_tasks.caller.enqueue import enqueue as enqueue
 from django_spec_tasks.models.spec_run import SpecRun as SpecRun
 from django_spec_tasks.types.run_state import RunState as RunState
 from django_spec_tasks.types.task_backend import TaskBackend as TaskBackend
@@ -12,4 +13,5 @@ __all__ = [
     "TaskBackend",
     "TaskBinding",
     "__version__",
+    "enqueue",
 ]

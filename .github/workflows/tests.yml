@@ -186,6 +186,22 @@ jobs:
           assert (importlib.util.find_spec("django_tasks") is not None) == (extra == "django-tasks")
           assert "rest_framework" not in sys.modules, "the package imported DRF"
 
+          # The caller's half imports in every shape, with whichever queue is absent absent.
+          from django_spec_tasks import enqueue
+
+          assert callable(enqueue)
+
+          if extra == "celery":
+              # A worker finds a message's task by name in its own registry, so startup alone
+              # has to have registered it.
+              from celery import current_app
+
+              assert "django_spec_tasks.run_spec" in current_app.tasks, "task not registered"
+          if extra == "django-tasks":
+              from django_spec_tasks.backends.django_tasks_backend import DjangoTasksBackend
+
+              assert DjangoTasksBackend().alias == "default"
+
           print("IMPORT OK", repr(extra), django_spec_tasks.__version__, django.get_version())
           PY
 

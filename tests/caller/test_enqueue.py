@@ -21,10 +21,10 @@ from django_service_specs import (
 )
 
 from django_spec_tasks.binding.task_binding import TaskBinding
-from django_spec_tasks.enqueue.enqueue import enqueue
+from django_spec_tasks.caller.enqueue import enqueue
 from django_spec_tasks.models.spec_run import SpecRun
 from django_spec_tasks.types.run_state import RunState
-from tests.enqueue.conftest import STAFF_CHECK, RecordingBackend, build_registry
+from tests.caller.conftest import STAFF_CHECK, RecordingBackend, build_registry
 
 try:
     from django.utils.json import normalize_json
