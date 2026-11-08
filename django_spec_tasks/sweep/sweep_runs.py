@@ -13,8 +13,8 @@ from django_service_specs import ServiceSpec, kernel_spec
 
 from django_spec_tasks.binding.task_binding import TaskBinding
 from django_spec_tasks.models.spec_run import SpecRun
-from django_spec_tasks.sweep.sweep_report import SweepReport
 from django_spec_tasks.types.run_state import RunState
+from django_spec_tasks.types.sweep_report import SweepReport
 
 logger = logging.getLogger(__name__)
 

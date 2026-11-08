@@ -4,6 +4,8 @@ import importlib
 
 from django_spec_tasks.binding.task_binding import TaskBinding
 from django_spec_tasks.types.run_state import RunState
+from django_spec_tasks.types.run_status import RunStatus
+from django_spec_tasks.types.sweep_report import SweepReport
 from django_spec_tasks.types.task_backend import TaskBackend
 from django_spec_tasks.types.terminal_states import TERMINAL_STATES
 from django_spec_tasks.version import __version__
@@ -16,16 +18,26 @@ from django_spec_tasks.version import __version__
 _LAZY_EXPORTS: dict[str, str] = {
     "SpecRun": "django_spec_tasks.models.spec_run",
     "enqueue": "django_spec_tasks.caller.enqueue",
+    "prune_runs": "django_spec_tasks.sweep.prune_runs",
+    "read_run": "django_spec_tasks.read.read_run",
+    "state_of": "django_spec_tasks.read.state_of",
+    "sweep_runs": "django_spec_tasks.sweep.sweep_runs",
 }
 
 __all__ = [
     "TERMINAL_STATES",
     "RunState",
+    "RunStatus",
     "SpecRun",
+    "SweepReport",
     "TaskBackend",
     "TaskBinding",
     "__version__",
     "enqueue",
+    "prune_runs",
+    "read_run",
+    "state_of",
+    "sweep_runs",
 ]
 
 

@@ -128,7 +128,7 @@ admin.site.register(SpecRun, PayloadSpecRunAdmin)
 
 ::: django_spec_tasks.sweep.sweep_runs.sweep_runs
 
-::: django_spec_tasks.sweep.sweep_report.SweepReport
+::: django_spec_tasks.types.sweep_report.SweepReport
 
 ::: django_spec_tasks.sweep.prune_runs.prune_runs
 
@@ -136,4 +136,4 @@ admin.site.register(SpecRun, PayloadSpecRunAdmin)
 
 ::: django_spec_tasks.read.state_of.state_of
 
-::: django_spec_tasks.read.run_status.RunStatus
+::: django_spec_tasks.types.run_status.RunStatus

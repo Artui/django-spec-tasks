@@ -13,9 +13,9 @@ from django_service_specs import NotPermitted
 from django_spec_tasks.binding.task_binding import TaskBinding
 from django_spec_tasks.models.spec_run import SpecRun
 from django_spec_tasks.read.read_run import read_run
-from django_spec_tasks.read.run_status import RunStatus
 from django_spec_tasks.read.state_of import state_of
 from django_spec_tasks.types.run_state import RunState
+from django_spec_tasks.types.run_status import RunStatus
 from tests.read.conftest import MARKER
 
 pytestmark = pytest.mark.django_db

@@ -7,8 +7,8 @@ from django_service_specs import NotPermitted, is_deactivated
 
 from django_spec_tasks.binding.task_binding import TaskBinding
 from django_spec_tasks.models.spec_run import SpecRun
-from django_spec_tasks.read.run_status import RunStatus
 from django_spec_tasks.types.run_state import RunState
+from django_spec_tasks.types.run_status import RunStatus
 
 
 def read_run(binding: TaskBinding, run_id: str, principal: Any) -> RunStatus:
