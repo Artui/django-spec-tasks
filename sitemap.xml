@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://artui.github.io/django-spec-tasks/</loc>
+         <lastmod>2026-11-08</lastmod>
+    </url>
+    <url>
+         <loc>https://artui.github.io/django-spec-tasks/backends/</loc>
+         <lastmod>2026-11-08</lastmod>
+    </url>
+    <url>
+         <loc>https://artui.github.io/django-spec-tasks/domain-events/</loc>
+         <lastmod>2026-11-08</lastmod>
+    </url>
+    <url>
+         <loc>https://artui.github.io/django-spec-tasks/operating/</loc>
+         <lastmod>2026-11-08</lastmod>
+    </url>
+    <url>
+         <loc>https://artui.github.io/django-spec-tasks/reference/</loc>
+         <lastmod>2026-11-08</lastmod>
+    </url>
+    <url>
+         <loc>https://artui.github.io/django-spec-tasks/worker/</loc>
+         <lastmod>2026-11-08</lastmod>
+    </url>
+</urlset>

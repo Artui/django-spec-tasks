@@ -1,0 +1,945 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Run a django-service-specs spec as a background task: a durable run record, and a worker that re-checks through dispatch.">
+      
+      
+      
+        <link rel="canonical" href="https://artui.github.io/django-spec-tasks/worker/">
+      
+      
+        <link rel="prev" href="../backends/">
+      
+      
+        <link rel="next" href="../operating/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Worker - django-spec-tasks</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#the-worker" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="django-spec-tasks" class="md-header__button md-logo" aria-label="django-spec-tasks" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            django-spec-tasks
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Worker
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Artui/django-spec-tasks" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artui/django-spec-tasks
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="django-spec-tasks" class="md-nav__button md-logo" aria-label="django-spec-tasks" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    django-spec-tasks
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Artui/django-spec-tasks" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artui/django-spec-tasks
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-transaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The transaction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-a-run-ends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How a run ends
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The result
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#progress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Progress
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-seams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The seams
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exceptions-the-worker-does-not-catch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exceptions the worker does not catch
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operating/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../domain-events/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    With django-domain-events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-transaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The transaction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-a-run-ends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How a run ends
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The result
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#progress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Progress
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-seams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The seams
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exceptions-the-worker-does-not-catch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exceptions the worker does not catch
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Artui/django-spec-tasks/edit/main/docs/worker.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="the-worker">The worker<a class="headerlink" href="#the-worker" title="Permanent link">&para;</a></h1>
+<p><code>run_spec(run_id)</code> runs one row: it claims it, calls the spec through the kernel's <code>dispatch</code>, and
+records how the call ended, in one transaction when the spec says <code>atomic=True</code>. <strong>Progress under
+<code>atomic=True</code> is invisible until that transaction commits, unless the binding names a
+<code>progress_using</code> alias:</strong> a report written on the connection holding the transaction cannot be read
+from any other, which is the point of the transaction and the cost of writing to the row.</p>
+<p>Both backends call this function with one string and read nothing back. It takes no retries and
+returns no result: whether a run may run again is read from the row.</p>
+<h2 id="the-steps">The steps<a class="headerlink" href="#the-steps" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Read.</strong> A row that is not <code>PENDING</code> ends the call here. A redelivered message costs one query and
+   no run, whatever the spec declares.</li>
+<li><strong>Find.</strong> The binding by name and the spec in its registry. Either missing ends the row
+   <code>SPEC_UNAVAILABLE</code>, from <code>PENDING</code>, with <code>attempts</code> unchanged, and <code>{"message": ...}</code> in
+   <code>refusal_detail</code> naming what is missing.</li>
+<li><strong>Claim.</strong> One conditional <code>UPDATE</code> to <code>RUNNING</code>, committed alone before anything runs. Losing it
+   ends the call. Two copies of a message cannot both win, and a copy cannot run a row another
+   attempt finished.</li>
+<li><strong>Resolve.</strong> <code>actor_pk</code> null means the principal is <code>None</code>, never <code>AnonymousUser</code>, and a spec gated
+   on a principal refuses it. Otherwise <code>binding.resolve_actor(actor_pk)</code>.</li>
+<li><strong>Run.</strong> <code>dispatch</code>, then <code>present</code>, inside <code>around_run</code>. Everything enqueue checked is checked again,
+   and the Validator runs for the first time.</li>
+<li><strong>Record.</strong> A write conditioned on <code>(pk, state, attempts)</code>, then <code>on_finish</code>, in one transaction.</li>
+</ol>
+<p>The call is a task call: <code>call_transport(call_context)</code> reads <code>"task"</code>, and whatever <code>carry</code> recorded at
+enqueue is at <code>call_context["carried"]</code>, where a <code>PoolSeeds</code> resolver can read it.</p>
+<h2 id="the-transaction">The transaction<a class="headerlink" href="#the-transaction" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Spec</th>
+<th>What wraps what</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ServiceSpec</code> with <code>atomic=True</code></td>
+<td>one transaction around <code>around_run</code>, <code>dispatch</code>, <code>present</code>, the terminal write and <code>on_finish</code></td>
+</tr>
+<tr>
+<td><code>ServiceSpec</code> with <code>atomic=False</code></td>
+<td>no outer transaction; the terminal write and <code>on_finish</code> take their own</td>
+</tr>
+<tr>
+<td><code>SelectorSpec</code></td>
+<td>nothing to roll back, so as <code>atomic=False</code></td>
+</tr>
+</tbody>
+</table>
+<p>So under <code>atomic=True</code> the service's work and the run's state are one fact. A worker dying before the
+commit leaves no row of the service's, and a <code>RUNNING</code> run the sweep answers.</p>
+<p>A refusal or an exception rolls that transaction back first, then writes its state and runs <code>on_finish</code>
+in a transaction of its own, so the state and what it fires still commit together.</p>
+<p><strong>The window that remains.</strong> An <code>atomic=False</code> spec's committed work and its terminal write are two
+facts. A worker dying between them leaves a <code>RUNNING</code> row the sweep ends <code>ABANDONED</code>, with the work done.
+That is what <code>atomic=False</code> means, and it is the right choice for a call one transaction should not span,
+such as an agent run.</p>
+<p><strong>A lost claim commits nothing.</strong> Past its lease a run may be handed to another worker or ended by the
+sweep. The terminal write then matches no row: it logs a warning and writes nothing, nothing fires, and
+under <code>atomic=True</code> the service's work rolls back with it. Under <code>atomic=False</code> the work stands. So a
+binding's <code>lease</code> is sized to its longest run.</p>
+<h2 id="how-a-run-ends">How a run ends<a class="headerlink" href="#how-a-run-ends" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Raised</th>
+<th>State</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>NotPermitted</code>, <code>PermissionCheckDenied</code></td>
+<td><code>AUTHORIZATION_LAPSED</code></td>
+<td>authorized at enqueue, refused now: access changed, the code did not break</td>
+</tr>
+<tr>
+<td><code>PrincipalUnavailable</code></td>
+<td><code>AUTHORIZATION_LAPSED</code></td>
+<td>deleted, malformed or deactivated in the window</td>
+</tr>
+<tr>
+<td><code>InvalidArguments</code></td>
+<td><code>INVALID</code></td>
+<td>the Validator runs only here</td>
+</tr>
+<tr>
+<td><code>DispatchError</code>, and any later subclass</td>
+<td><code>INVALID</code></td>
+<td>a refusal of the call</td>
+</tr>
+<tr>
+<td><code>ServiceValidationError</code></td>
+<td><code>INVALID</code></td>
+<td>the service's word for bad input</td>
+</tr>
+<tr>
+<td><code>ServiceNotFound</code></td>
+<td><code>REFUSED</code></td>
+<td>the target vanished</td>
+</tr>
+<tr>
+<td><code>ActionUnavailable</code>, <code>ServiceConflict</code></td>
+<td><code>CONFLICT</code></td>
+<td>terminal; <code>ActionUnavailable</code> leaves its code</td>
+</tr>
+<tr>
+<td><code>AdditionalInputRequired</code></td>
+<td><code>INPUT_REQUIRED</code></td>
+<td>nobody to ask; the remedy is a new enqueue carrying the answer</td>
+</tr>
+<tr>
+<td><code>ServiceError</code>, and any later subclass</td>
+<td><code>REFUSED</code></td>
+<td>the operation refused on its own terms</td>
+</tr>
+</tbody>
+</table>
+<p><code>run_state_for(error)</code> is this table. Anything else is <code>FAILED</code>, and <code>FAILED</code> is never the answer to a
+refusal.</p>
+<p>Every row of the table records:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Holds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>refusal_class</code></td>
+<td>the class's name, a project's own subclass included</td>
+</tr>
+<tr>
+<td><code>refusal_code</code></td>
+<td>its <code>code</code>, where it has one</td>
+</tr>
+<tr>
+<td><code>refusal_detail</code></td>
+<td><code>{"message": ..., "errors": ..., "schema": ...}</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>errors</code> is the field errors of an <code>InvalidArguments</code> or a <code>ServiceValidationError</code>, and <code>schema</code> is what
+an <code>AdditionalInputRequired</code> asks for; each is null otherwise. A refusal carrying a detail no JSON column
+could store keeps its state and its message, with both null.</p>
+<p>A <code>FAILED</code> run has <code>traceback</code> and leaves the refusal columns null: a reader is shown <code>refusal_detail</code> and
+never <code>traceback</code>, so a fault's words stay where only an operator looks.</p>
+<h2 id="the-result">The result<a class="headerlink" href="#the-result" title="Permanent link">&para;</a></h2>
+<p><code>SUCCEEDED</code> records <code>kind</code>, and <code>output</code>, which is <code>present(spec, result)</code>: what a JSON transport would
+have sent, stamped with <code>package_version</code> since it is a contract. <code>instance_pk</code> keeps the target's identity.
+<code>kind</code> is <code>"instance"</code>, <code>"list"</code> or <code>"not_found"</code>. A selector that finds nothing has answered, so it ends
+<code>SUCCEEDED</code> with <code>kind="not_found"</code> and no output. A service whose target is gone never ran, so it ends
+<code>REFUSED</code>, with <code>kind="not_found"</code> and <code>refusal_class="ServiceNotFound"</code>, as a <code>ServiceNotFound</code> the service
+raises itself does: a refund of a deleted order must not read as a refund that happened.</p>
+<p><strong>The bound.</strong> Past <code>max_output_bytes</code>, measured as the column writes it, the run ends <code>OUTPUT_TOO_LARGE</code>
+with <code>{"size": ..., "limit": ...}</code> in <code>refusal_detail</code>, and <code>output</code> stays null. Under <code>atomic=True</code> the work
+rolls back with it, so the caller reads a clean refusal. Under <code>atomic=False</code> the work stands, and the state
+says the result was not stored. Output is never truncated.</p>
+<p>Output a JSON column cannot hold, which is a presenter's bug, ends <code>FAILED</code>, as any exception nobody declared
+does. That counts <code>NaN</code>, <code>inf</code>, a NUL character and half a surrogate pair, which Postgres refuses and SQLite
+mostly stores. A refusal keeps its state however it reads: a message and a traceback lose what no text column
+holds, a <code>code</code> is clipped to its column, and a detail no column could hold is left out.</p>
+<h2 id="progress">Progress<a class="headerlink" href="#progress" title="Permanent link">&para;</a></h2>
+<p>A service declaring <code>progress</code> gets a reporter that writes to the row, for as long as this attempt holds it.
+With a <code>total</code>, the <code>progress</code> column holds the fraction done; without one, the service's own unit.
+<code>message</code> lands in <code>progress_message</code>, and <code>meta</code> is dropped.</p>
+<table>
+<thead>
+<tr>
+<th>Spec</th>
+<th><code>progress_using</code></th>
+<th>Read from another connection</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>atomic=False</code>, or a selector</td>
+<td>unset</td>
+<td>at once</td>
+</tr>
+<tr>
+<td><code>atomic=True</code></td>
+<td>unset</td>
+<td>only after the run commits, and never if it rolls back</td>
+</tr>
+<tr>
+<td><code>atomic=True</code></td>
+<td>an alias</td>
+<td>at once, on a database that lets a second connection write</td>
+</tr>
+</tbody>
+</table>
+<p>A report that cannot be written is logged and dropped: progress never ends a run. SQLite has one writer, so
+under <code>atomic=True</code> an alias's write waits for the service's and fails once the service has written anything.</p>
+<p>Progress increases within one dispatch. A claim clears both columns, so an idempotent spec run again
+starts from nothing rather than from what the attempt before it reported.</p>
+<h2 id="the-seams">The seams<a class="headerlink" href="#the-seams" title="Permanent link">&para;</a></h2>
+<p><code>around_run(run, principal)</code> is entered before <code>dispatch</code> and left after <code>present</code>, and is handed what the
+call raises. It may not swallow it: with no result to record, a run whose seam swallowed its exception ends
+<code>FAILED</code> rather than <code>SUCCEEDED</code> with nothing to show.</p>
+<p><code>on_finish(run)</code> runs inside the terminal transaction and reads the row as a reader would. Raising from it is
+a bug in the project: the terminal write rolls back with it, and the exception reaches the worker. The row
+stays <code>RUNNING</code>, and the sweep's own ending calls the same hook, so a hook that always raises keeps the row
+<code>RUNNING</code> and counted in the sweep's <code>errors</code> until it stops raising.</p>
+<h2 id="exceptions-the-worker-does-not-catch">Exceptions the worker does not catch<a class="headerlink" href="#exceptions-the-worker-does-not-catch" title="Permanent link">&para;</a></h2>
+<p>A <code>BaseException</code> is the worker dying: it passes through untouched, rolling back whatever transaction is
+open, and leaves the row <code>RUNNING</code>. So does anything raised while recording the ending, since nothing could
+record that either.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "content.action.edit", "toc.follow"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>
