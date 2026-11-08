@@ -8,7 +8,6 @@ Only a process that starts cold, as a worker does, can tell.
 
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 import sys
@@ -16,6 +15,7 @@ import textwrap
 from pathlib import Path
 
 import django_spec_tasks
+from tests.backends.utils import process_env
 
 _PACKAGE = Path(django_spec_tasks.__file__).parent
 _REPOSITORY = _PACKAGE.parent
@@ -35,7 +35,7 @@ def _registered_in_a_cold_process(root: Path) -> bool:
     completed = subprocess.run(
         [sys.executable, "-c", _COLD_START],
         cwd=root,
-        env={**os.environ, "DJANGO_SETTINGS_MODULE": "tests.conftest_settings"},
+        env=process_env(),
         capture_output=True,
         text=True,
     )

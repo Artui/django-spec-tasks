@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 from pathlib import Path
 
 import django_spec_tasks
+from tests.backends.utils import process_env
 
 _REPOSITORY = Path(django_spec_tasks.__file__).parent.parent
 
@@ -30,7 +30,7 @@ def test_the_package_and_enqueue_import_with_neither_queue_installed() -> None:
     completed = subprocess.run(
         [sys.executable, "-c", _WITH_NO_QUEUE],
         cwd=_REPOSITORY,
-        env={**os.environ, "DJANGO_SETTINGS_MODULE": "tests.conftest_settings"},
+        env=process_env(),
         capture_output=True,
         text=True,
     )

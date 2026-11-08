@@ -321,7 +321,8 @@ class TestTheMessage:
     def test_the_callback_waits_on_the_alias_the_row_was_written_to(
         self, binding: TaskBinding, backend: RecordingBackend, user: Any
     ) -> None:
-        # A router sends the run table to the second connection. A callback registered on
+        # Not a supported setup (the system check refuses a run table off the default alias);
+        # it isolates the mechanism. A router sends the run table to the second connection. A callback registered on
         # the default alias would find autocommit there and fire at once, before this
         # transaction committed.
         class ToProgress:
