@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from dataclasses import fields
+from typing import Any
 
 import pytest
 from django.contrib.auth.models import AnonymousUser, User
@@ -179,6 +180,8 @@ def test_no_refusal_tells_a_stranger_from_an_id_that_is_nothing(
     make_binding: MakeBinding, make_run: MakeRun, owner: User, stranger: User, which: str
 ) -> None:
     binding = make_binding(can_read=lambda principal, run: True)
+    # The row a lookup that ignored the id would find, and ``can_read`` would hand over.
+    make_run(binding, owner)
     other = make_binding()
     elsewhere = make_run(other, owner)
     refused_stranger = make_binding()
@@ -199,6 +202,17 @@ def test_no_refusal_tells_a_stranger_from_an_id_that_is_nothing(
     assert type(refusal.value) is NotPermitted
     assert type(stranger_refusal.value) is NotPermitted
     assert str(refusal.value) == str(stranger_refusal.value)
+
+
+def test_a_malformed_id_costs_no_query(
+    make_binding: MakeBinding, owner: User, django_assert_num_queries: Callable[..., Any]
+) -> None:
+    binding = make_binding()
+
+    with django_assert_num_queries(0):
+        assert state_of(binding, "not-a-uuid") is None
+        with pytest.raises(NotPermitted):
+            read_run(binding, "not-a-uuid", owner)
 
 
 # --- state_of: for trusted callers, with no principal ---------------------------------
