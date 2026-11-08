@@ -70,4 +70,5 @@ that runs the sweep. There is no generic `@task` decorator, no retry policy, and
 - [Backends](backends.md): enqueueing, and choosing where a run executes.
 - [Worker](worker.md): the claim, the transaction, each ending, progress and the seams.
 - [Operating](operating.md): the sweep, reading a run, pruning, the admin.
+- [With django-domain-events](domain-events.md): composing with no import in either direction.
 - [Reference](reference.md): every public name.

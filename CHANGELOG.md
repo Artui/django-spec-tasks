@@ -19,5 +19,6 @@
 - `read_run` returns a frozen `RunStatus` to a run's owner or to whoever `can_read` allows, and never carries `params`, `carried`, `traceback`, `actor_pk` or `refusal_class`; a stranger, an unknown id, a malformed id and another binding's run raise the same `NotPermitted`. `state_of` answers the state alone for trusted callers.
 - `prune_runs` and the `prune_spec_runs --older-than DAYS` command delete finished runs in batches and never a pending or running one; there is no default age.
 - `SpecRun` is registered read-only in the admin: no add, change, delete or actions; `params`, `carried` and `output` are hidden unless a subclass sets `show_payloads`.
+- A page on composing with django-domain-events with no import in either direction: an event starting a run, a service firing inside a run, a run finishing and firing an event, and a delayed run, built on `carry=`, `around_run=` and `on_finish=`; it states the one-database condition, that a replay is a new run, attribution against authorization, and why a run is not a delivery.
 
 [Unreleased]: https://github.com/Artui/django-spec-tasks/compare/v0.0.0...HEAD

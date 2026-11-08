@@ -81,4 +81,5 @@ nav:
   - Backends: backends.md
   - Worker: worker.md
   - Operating: operating.md
+  - With django-domain-events: domain-events.md
   - Reference: reference.md
