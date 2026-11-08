@@ -27,6 +27,10 @@ MakeRun = Callable[..., SpecRun]
 IDEMPOTENT = [True, False, None]
 
 
+def _broken(run: SpecRun) -> None:
+    raise RuntimeError("the project's hook is broken")
+
+
 class Finished:
     """An ``on_finish`` that remembers the state it saw each run in."""
 
@@ -59,7 +63,7 @@ def test_a_pending_run_past_its_grace_is_asked_for_again(
 def test_a_pending_run_inside_its_grace_is_left_alone(
     make_binding: MakeBinding, make_run: MakeRun, backend: RecordingBackend
 ) -> None:
-    # Names the created_at conjunct: without it every pending run is asked for at once.
+    # Names the asked_at conjunct: without it every pending run is asked for at once.
     binding = make_binding()
     make_run(binding, created_at=ago(minutes=9))
 
@@ -579,10 +583,7 @@ def test_a_backend_that_raises_for_a_pending_row_is_counted_not_reasked(
 def test_an_on_finish_that_raises_rolls_its_row_back_and_the_sweep_goes_on(
     make_binding: MakeBinding, lapsed: MakeRun
 ) -> None:
-    def broken(run: SpecRun) -> None:
-        raise RuntimeError("the project's hook is broken")
-
-    bad = make_binding(on_finish=broken)
+    bad = make_binding(on_finish=_broken)
     good = make_binding()
     stuck = lapsed(bad, created_at=ago(hours=5))
     ended = lapsed(good, created_at=ago(hours=1))
@@ -668,10 +669,7 @@ def test_lapsed_rows_sharing_a_lease_are_each_handled_once_across_pages(
     make_binding: MakeBinding, lapsed: MakeRun
 ) -> None:
     # A row whose ending fails stays lapsed, so only the cursor keeps it from a second answer.
-    def broken(run: SpecRun) -> None:
-        raise RuntimeError("the project's hook is broken")
-
-    binding = make_binding(on_finish=broken)
+    binding = make_binding(on_finish=_broken)
     moment = ago(hours=1)
     for _ in range(4):
         lapsed(binding, lease_expires_at=moment)
@@ -791,10 +789,7 @@ def test_a_row_a_backend_refused_waits_out_its_grace_too(
 def test_a_binding_with_a_broken_hook_cannot_use_another_binding_s_budget(
     make_binding: MakeBinding, lapsed: MakeRun
 ) -> None:
-    def broken(run: SpecRun) -> None:
-        raise RuntimeError("the project's hook is broken")
-
-    bad = make_binding(on_finish=broken)
+    bad = make_binding(on_finish=_broken)
     for hours in (5, 4, 3):
         lapsed(bad, created_at=ago(hours=hours))
     run = lapsed(make_binding(), created_at=ago(hours=1))
@@ -824,10 +819,7 @@ def test_a_hook_that_always_raises_keeps_its_row_running_and_counted(
 ) -> None:
     # The sweep calls the same hook the worker did, so no later sweep can end this row until
     # the hook stops raising. The operating page says so.
-    def broken(run: SpecRun) -> None:
-        raise RuntimeError("the project's hook is broken")
-
-    run = lapsed(make_binding(on_finish=broken))
+    run = lapsed(make_binding(on_finish=_broken))
 
     for _ in range(3):
         assert sweep_runs().errors == 1

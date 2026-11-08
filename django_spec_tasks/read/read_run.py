@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import uuid
 from typing import Any
 
 from django_service_specs import NotPermitted, is_deactivated
 
 from django_spec_tasks.binding.task_binding import TaskBinding
 from django_spec_tasks.models.spec_run import SpecRun
+from django_spec_tasks.read.utils import runs_named
 from django_spec_tasks.types.run_state import RunState
 from django_spec_tasks.types.run_status import RunStatus
 
@@ -26,7 +26,7 @@ def read_run(binding: TaskBinding, run_id: str, principal: Any) -> RunStatus:
     Raises:
         NotPermitted: For every refusal above.
     """
-    run = _find(binding, run_id)
+    run = runs_named(binding, run_id).first()
     if run is None or not _may_read(binding, run, principal):
         raise NotPermitted()
     return RunStatus(
@@ -41,14 +41,6 @@ def read_run(binding: TaskBinding, run_id: str, principal: Any) -> RunStatus:
         created_at=run.created_at,
         finished_at=run.finished_at,
     )
-
-
-def _find(binding: TaskBinding, run_id: str) -> SpecRun | None:
-    try:
-        key = uuid.UUID(str(run_id))
-    except ValueError:
-        return None
-    return SpecRun.objects.filter(pk=key, binding=binding.name).first()
 
 
 def _may_read(binding: TaskBinding, run: SpecRun, principal: Any) -> bool:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from dataclasses import fields
+from typing import Any
 
 import pytest
 from django.contrib.auth.models import AnonymousUser, User
@@ -144,7 +145,6 @@ def test_can_read_saying_no_is_a_refusal(
 def test_a_system_run_is_read_only_through_can_read(
     make_binding: MakeBinding, make_run: MakeRun, owner: User
 ) -> None:
-    run = make_run(make_binding(), None)
     closed = make_binding()
     open_ = make_binding(can_read=lambda principal, run: True)
     system_closed = make_run(closed, None)
@@ -153,26 +153,23 @@ def test_a_system_run_is_read_only_through_can_read(
     with pytest.raises(NotPermitted):
         read_run(closed, str(system_closed.pk), owner)
     assert read_run(open_, str(system_open.pk), owner).id == str(system_open.pk)
-    assert run.actor_pk is None
+    assert system_open.actor_pk is None
 
 
-def test_an_anonymous_principal_cannot_read_a_system_run(
-    make_binding: MakeBinding, make_run: MakeRun
-) -> None:
-    # Names the non-null ``actor_pk`` conjunct: a system run has no owner, and an anonymous
-    # principal has no pk, so equality of the two must not read as ownership.
-    binding = make_binding()
-    run = make_run(binding, None)
-
-    with pytest.raises(NotPermitted):
-        read_run(binding, str(run.pk), AnonymousUser())
-
-
-def test_a_principal_with_no_pk_is_not_the_owner(
-    make_binding: MakeBinding, make_run: MakeRun, owner: User
+@pytest.mark.parametrize(
+    "actor_pk",
+    [
+        pytest.param(None, id="a_system_run"),
+        pytest.param("1", id="someone_s_run"),
+        # Names the ``pk is not None`` guard: ``str(None)`` is "None", which a row could hold.
+        pytest.param("None", id="a_row_naming_none"),
+    ],
+)
+def test_an_anonymous_principal_owns_nothing(
+    make_binding: MakeBinding, make_run: MakeRun, actor_pk: str | None
 ) -> None:
     binding = make_binding()
-    run = make_run(binding, owner)
+    run = make_run(binding, None, actor_pk=actor_pk)
 
     with pytest.raises(NotPermitted):
         read_run(binding, str(run.pk), AnonymousUser())
@@ -183,8 +180,9 @@ def test_no_refusal_tells_a_stranger_from_an_id_that_is_nothing(
     make_binding: MakeBinding, make_run: MakeRun, owner: User, stranger: User, which: str
 ) -> None:
     binding = make_binding(can_read=lambda principal, run: True)
+    # The row a lookup that ignored the id would find, and ``can_read`` would hand over.
+    make_run(binding, owner)
     other = make_binding()
-    theirs = make_run(binding, owner)
     elsewhere = make_run(other, owner)
     refused_stranger = make_binding()
     stranger_run = make_run(refused_stranger, owner)
@@ -204,7 +202,17 @@ def test_no_refusal_tells_a_stranger_from_an_id_that_is_nothing(
     assert type(refusal.value) is NotPermitted
     assert type(stranger_refusal.value) is NotPermitted
     assert str(refusal.value) == str(stranger_refusal.value)
-    assert theirs.pk != elsewhere.pk
+
+
+def test_a_malformed_id_costs_no_query(
+    make_binding: MakeBinding, owner: User, django_assert_num_queries: Callable[..., Any]
+) -> None:
+    binding = make_binding()
+
+    with django_assert_num_queries(0):
+        assert state_of(binding, "not-a-uuid") is None
+        with pytest.raises(NotPermitted):
+            read_run(binding, "not-a-uuid", owner)
 
 
 # --- state_of: for trusted callers, with no principal ---------------------------------
@@ -232,14 +240,3 @@ def test_state_of_answers_none_for_an_id_that_is_not_this_bindings(
     }
 
     assert state_of(binding, ids[which]) is None
-
-
-def test_an_anonymous_principal_is_not_the_owner_of_a_run_that_names_none(
-    make_binding: MakeBinding, make_run: MakeRun
-) -> None:
-    # Names the ``pk is not None`` guard: ``str(None)`` is "None", which a row could hold.
-    binding = make_binding()
-    run = make_run(binding, None, actor_pk="None")
-
-    with pytest.raises(NotPermitted):
-        read_run(binding, str(run.pk), AnonymousUser())

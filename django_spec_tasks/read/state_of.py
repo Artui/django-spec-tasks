@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import uuid
-
 from django_spec_tasks.binding.task_binding import TaskBinding
-from django_spec_tasks.models.spec_run import SpecRun
+from django_spec_tasks.read.utils import runs_named
 from django_spec_tasks.types.run_state import RunState
 
 
@@ -14,10 +12,5 @@ def state_of(binding: TaskBinding, run_id: str) -> RunState | None:
     answers ``None`` for an id that is not this binding's, or not an id at all. Anything
     a person may reach goes through ``read_run``.
     """
-    try:
-        key = uuid.UUID(str(run_id))
-    except ValueError:
-        return None
-    state = SpecRun.objects.filter(pk=key, binding=binding.name).values_list("state", flat=True)
-    found = state.first()
+    found = runs_named(binding, run_id).values_list("state", flat=True).first()
     return None if found is None else RunState(found)
