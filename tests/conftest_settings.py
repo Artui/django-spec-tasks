@@ -16,8 +16,8 @@ it while ``default`` holds the write lock fails, and the short timeout makes tha
 
 ``SPEC_TASKS_TEST_DATABASE=postgres`` selects Postgres, read from the ``PG*`` variables libpq
 itself reads, which is the CI cell and how to run it by hand. SQLite stores a NUL and half a
-surrogate pair in a JSON column and Postgres refuses them, so a guard against either is only
-proved there.
+surrogate pair in a JSON column and Postgres refuses them, so a value nothing guards fails its
+write only there.
 ``progress`` is the same second connection, with the same settings as ``default``: Django gives
 two aliases of one signature a single test database, as it does on the SQLite file. Any other
 value of the variable is refused, because a misspelling must not read as a green Postgres run

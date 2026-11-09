@@ -112,13 +112,15 @@ def main() -> None:
     if extra == "celery":
         from celery import Celery
 
-        from django_spec_tasks.backends.celery_backend import CeleryBackend
-
         app = Celery("queue_shape", set_as_current=True)
         app.conf.update(task_always_eager=True, task_eager_propagates=True)
         # A worker finds a message's task by name in its own registry, so startup alone has to
-        # have registered it.
+        # have registered it. Asked before this script imports the backend, whose own import
+        # registers the task and would answer for ``apps.py``.
         assert "django_spec_tasks.run_spec" in app.tasks, "task not registered"
+
+        from django_spec_tasks.backends.celery_backend import CeleryBackend
+
         backends["celery"] = CeleryBackend()
     loaded = "absent"
     if framework:

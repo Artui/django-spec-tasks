@@ -74,7 +74,7 @@ jobs:
       # the image makes the answer drift when the image does.
       - name: Install Python 3.10
         run: uv python install 3.10
-      # `--refresh` on both resolutions below. This job's whole claim is "what a
+      # `--refresh` on the resolution below. This job's whole claim is "what a
       # consumer resolving from scratch would get", and the runner's uv cache is
       # shared across runs: without it the answer comes from whatever package
       # list that cache happens to hold, which can be hours behind the index.
@@ -165,10 +165,10 @@ jobs:
   postgres:
     # SQLite stores a NUL and half a surrogate pair in a JSON column, and enforces
     # no column length. Postgres refuses each at the write, which is past every
-    # handler in the worker and leaves a run RUNNING. The package guards against
-    # what it knows of, and a guard against what SQLite accepts is only proved
-    # where the database refuses: the matrix below can check that a guard ran, not
-    # that it was enough.
+    # handler in the worker and leaves a run RUNNING. The tests of the package's
+    # guards assert the values they leave, so they fail on either database. This
+    # job is for a write nothing guards yet: any test that sends such a value
+    # through the worker fails only here.
     #
     # One combination rather than a second matrix: the database is what is under
     # test here, and the cross-product of Python and Django is covered below.
@@ -220,8 +220,8 @@ jobs:
               cursor.execute("SELECT version(), current_setting('server_encoding')")
               print(cursor.fetchone())
           PY
-      # -rs names each skip and its reason in this log, so a test that stops
-      # running here cannot pass unnoticed.
+      # -rs names each skip and its reason in this log. It only prints: no skip
+      # count fails this job.
       - name: pytest against Postgres
         run: uv run --no-sync pytest -rs
 

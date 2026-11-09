@@ -154,8 +154,9 @@ on a Django below 6), `extras` (each install shape at the newest versions it res
 Python 3.11 so that it is what loads), `postgres` (the suite where a NUL and half a surrogate pair are
 refused), `test` (the Python x Django matrix), `coverage-badge`, `secrets`, and the `tests-passed` gate
 that branch protection points at. `floor-alone` and `extras` run `scripts/queue_shape.py`, which sends a
-spec from `enqueue` to its row through each queue the install holds. `upstream-drift.yml` resolves the newest versions `pyproject.toml` allows on
-a schedule, which is how a kernel release that breaks this package is found.
+spec from `enqueue` to its row through each queue the install holds. `upstream-drift.yml` resolves the
+newest versions `pyproject.toml` allows on a schedule, which is how a kernel release that breaks this
+package is found.
 
 Pre-commit runs gitleaks, the standard hygiene hooks, ruff, ty, four convention guards (no local
 filesystem paths, no internal plan-step labels, no mypy-style type-ignore, no emoji or marker glyphs in
