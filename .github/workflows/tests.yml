@@ -92,52 +92,14 @@ jobs:
       - name: Test
         run: uv run --no-sync pytest
 
-      # The step above installs every group and extra, and either can hold a
-      # shared dependency *above* the floor being claimed, masking the lie
-      # rather than exposing it. So the floor claim is also checked on the
-      # install shape with the fewest constraints: the package alone, no extras
-      # and no dev group.
-      - name: Import the package installed alone, at its floors
-        run: |
-          uv venv --python 3.10 .venv-floor
-          uv pip install --python .venv-floor/bin/python --resolution lowest-direct --refresh -e .
-          uv pip list --python .venv-floor/bin/python
-          .venv-floor/bin/python - <<'PY'
-          import django
-          from django.conf import settings
-
-          # A Django app holding a model, so it is imported the way a project
-          # imports it: listed, after django.setup() against configured settings.
-          settings.configure(
-              SECRET_KEY="x",
-              INSTALLED_APPS=[
-                  "django.contrib.contenttypes",
-                  "django.contrib.auth",
-                  "django_spec_tasks",
-              ],
-              DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
-          )
-          django.setup()
-
-          import sys
-
-          import django_spec_tasks
-
-          # The kernel it serves exists for dispatch without DRF, and a queue
-          # is one of the transports that needs none, so the install that
-          # proves the floors also proves neither package reaches for it.
-          # Nothing here installs DRF, so an import of it would already fail
-          # above; this names the claim.
-          assert "rest_framework" not in sys.modules, "the package imported DRF"
-
-          print("BASE IMPORT OK", django_spec_tasks.__version__, django.get_version())
-          PY
-
-  extras:
-    # Every install shape a project can choose, each alone: no queue, Celery,
-    # the Tasks backport. The other jobs install both, so a module that imports
-    # one queue where only the other is present passes all of them.
-    name: extras (${{ matrix.extra || 'none' }})
+  floor-alone:
+    # The job above installs every group and extra, and either can hold a shared
+    # dependency *above* the floor being claimed, masking the lie rather than
+    # exposing it. So the floor claim is also checked on the install shapes with
+    # the fewest constraints: the package alone, and with each queue alone, no dev
+    # group. Python 3.10 cannot resolve a Django of 6 or above, so these are also
+    # the runs of each queue on a Django below 6.
+    name: floor alone (${{ matrix.extra || 'none' }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -148,62 +110,120 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: true
+      - name: Install the package with this extra alone, at its floors
+        env:
+          EXTRA: ${{ matrix.extra }}
+        run: |
+          uv venv --python 3.10 .venv-floor
+          uv pip install --python .venv-floor/bin/python --resolution lowest-direct --refresh -e ".${EXTRA:+[$EXTRA]}"
+          uv pip list --python .venv-floor/bin/python
+      - name: Run a spec through each queue this shape holds
+        env:
+          EXTRA: ${{ matrix.extra }}
+        run: .venv-floor/bin/python scripts/queue_shape.py --extra "$EXTRA" --at-floors
+
+  extras:
+    # Every install shape a project can choose, each alone: no queue, Celery, the
+    # Tasks backport, at the newest versions each resolves. The other jobs install
+    # both queues, so a module that imports one queue where only the other is
+    # present passes all of them.
+    #
+    # The backport's cell is on Python 3.11 because Django 6 needs 3.12. From
+    # Django 6 core's `django.tasks` is preferred and the backport never loads, so
+    # on a newer Python this cell would pass without importing what it names. The
+    # script refuses that rather than leaving it to this pin.
+    name: extras (${{ matrix.extra || 'none' }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - extra: ""
+            python: "3.13"
+          - extra: "celery"
+            python: "3.13"
+          - extra: "django-tasks"
+            python: "3.11"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
       - name: Install the package with this extra alone
         env:
           EXTRA: ${{ matrix.extra }}
+          PYTHON: ${{ matrix.python }}
         run: |
-          uv venv --python 3.13 .venv-extra
+          uv venv --python "$PYTHON" .venv-extra
           uv pip install --python .venv-extra/bin/python -e ".${EXTRA:+[$EXTRA]}"
           uv pip list --python .venv-extra/bin/python
-      - name: Import the package the way a project does
+      - name: Run a spec through each queue this shape holds
         env:
           EXTRA: ${{ matrix.extra }}
+        run: .venv-extra/bin/python scripts/queue_shape.py --extra "$EXTRA"
+
+  postgres:
+    # SQLite stores a NUL and half a surrogate pair in a JSON column, and enforces
+    # no column length. Postgres refuses each at the write, which is past every
+    # handler in the worker and leaves a run RUNNING. The package guards against
+    # what it knows of, and a guard against what SQLite accepts is only proved
+    # where the database refuses: the matrix below can check that a guard ran, not
+    # that it was enough.
+    #
+    # One combination rather than a second matrix: the database is what is under
+    # test here, and the cross-product of Python and Django is covered below.
+    name: postgres / 3.13 / Django 6.1
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: django_spec_tasks
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      SPEC_TASKS_TEST_DATABASE: postgres
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: django_spec_tasks
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+      - name: Install Python 3.13
+        run: uv python install 3.13
+      - name: Sync dev deps
+        run: uv sync --all-groups --python 3.13
+      - name: Pin Django 6.1
+        run: uv pip install --reinstall-package django "django~=6.1.0"
+      # Fails the job if the settings did not take, rather than letting it pass
+      # as one more SQLite run, and names the server the summary below ran on.
+      - name: Confirm the suite's settings reach Postgres
+        env:
+          DJANGO_SETTINGS_MODULE: tests.conftest_settings
         run: |
-          .venv-extra/bin/python - <<'PY'
-          import importlib.util
-          import os
-          import sys
+          uv run --no-sync python - <<'PY'
+          from django.db import connection
 
-          import django
-          from django.conf import settings
-
-          settings.configure(
-              SECRET_KEY="x",
-              INSTALLED_APPS=[
-                  "django.contrib.contenttypes",
-                  "django.contrib.auth",
-                  "django_spec_tasks",
-              ],
-              DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
-          )
-          django.setup()
-
-          import django_spec_tasks
-
-          extra = os.environ["EXTRA"]
-          # The install really is the shape it claims, or this job proves nothing.
-          assert (importlib.util.find_spec("celery") is not None) == (extra == "celery")
-          assert (importlib.util.find_spec("django_tasks") is not None) == (extra == "django-tasks")
-          assert "rest_framework" not in sys.modules, "the package imported DRF"
-
-          # The caller's half imports in every shape, with whichever queue is absent absent.
-          from django_spec_tasks import enqueue
-
-          assert callable(enqueue)
-
-          if extra == "celery":
-              # A worker finds a message's task by name in its own registry, so startup alone
-              # has to have registered it.
-              from celery import current_app
-
-              assert "django_spec_tasks.run_spec" in current_app.tasks, "task not registered"
-          if extra == "django-tasks":
-              from django_spec_tasks.backends.django_tasks_backend import DjangoTasksBackend
-
-              assert DjangoTasksBackend().alias == "default"
-
-          print("IMPORT OK", repr(extra), django_spec_tasks.__version__, django.get_version())
+          assert connection.vendor == "postgresql", connection.vendor
+          with connection.cursor() as cursor:
+              cursor.execute("SELECT version(), current_setting('server_encoding')")
+              print(cursor.fetchone())
           PY
+      # -rs names each skip and its reason in this log, so a test that stops
+      # running here cannot pass unnoticed.
+      - name: pytest against Postgres
+        run: uv run --no-sync pytest -rs
 
   test:
     name: ${{ matrix.python-version }} / Django ${{ matrix.django-version }}
@@ -412,7 +432,7 @@ jobs:
     # always(), never !cancelled(): a skipped job reports a skipped check, and
     # branch protection counts a skipped required check as passing.
     if: always()
-    needs: [lint, docs, floor, extras, test]
+    needs: [lint, docs, floor, floor-alone, extras, postgres, test]
     runs-on: ubuntu-latest
     steps:
       # Pass on an exact `success` from every job above, rather than failing on

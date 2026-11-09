@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-from django.db import DatabaseError
+from django.db import DatabaseError, connection
 from django.db.models.sql.compiler import SQLUpdateCompiler
 from django_service_specs import ServiceSpec, Unrestricted
 
@@ -249,6 +249,12 @@ def test_progress_under_atomic_true_through_an_alias_is_visible_during_the_run(
     assert run.state == RunState.SUCCEEDED
 
 
+@pytest.mark.skipif(
+    connection.vendor != "sqlite",
+    reason="Needs SQLite's one writer per database: anywhere else the alias's write succeeds, "
+    "which is the feature that test_progress_under_atomic_true_through_an_alias_is_visible_"
+    "during_the_run proves.",
+)
 @pytest.mark.django_db(transaction=True, databases=_BOTH)
 def test_a_progress_alias_that_cannot_write_drops_the_report_and_the_run_finishes(
     make_run: Callable[..., SpecRun], caplog: pytest.LogCaptureFixture

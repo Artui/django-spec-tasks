@@ -82,6 +82,9 @@ dev = [
     # the groups without the extras, and ty and the backend tests need these.
     "celery>=5.6",
     "django-tasks>=0.12.0",
+    # The driver for the Postgres cell, which is where a value only SQLite stores is
+    # refused. The package names no driver, so this is a dev-group pin and never an extra.
+    "psycopg[binary]>=3.2.4",
 ]
 docs = [
     "mkdocs>=1.6.0",

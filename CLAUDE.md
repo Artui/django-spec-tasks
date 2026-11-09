@@ -95,6 +95,9 @@ Never `# pragma: no cover`. If a branch cannot be reached, that is a signal to r
 to exempt it.
 
 - **No DRF in any environment the suite runs in.**
+- **SQLite by default, Postgres on request.** `SPEC_TASKS_TEST_DATABASE=postgres` reads the `PG*`
+  variables, and any other value is refused. A test that only holds on one database says so with a
+  `skipif` naming why, and the `postgres` job prints each skip.
 - **Bindings register globally, at construction.** An autouse fixture in `tests/conftest.py` restores the
   registry after each test, so a test may build one freely and a module-level one survives.
   `TaskBinding.clear_registry()` is the one documented way to empty it.
@@ -139,15 +142,19 @@ The package imports Django, the standard library and `django_service_specs`. `ce
 | django-service-specs | 0.29.0 | the newest release, and the floor in the `floor` job |
 | celery (extra) | 5.6 | the newest release, and the floor in the `floor` job |
 | django-tasks (extra) | 0.12.0 | the newest release, and the floor in the `floor` job |
+| PostgreSQL | whichever the Django in use supports | 17, in the `postgres` job |
 
 The Python and Django floors are the kernel's, and cannot sit below them.
 
 ## CI and pre-commit
 
-Eight jobs in `tests.yml`: `lint`, `docs`, `floor` (resolves every declared dependency at the bottom of
-its window and runs the suite there), `extras` (imports the package with no queue and with each queue
-alone), `test` (the Python x Django matrix), `coverage-badge`, `secrets`, and the `tests-passed` gate that
-branch protection points at. `upstream-drift.yml` resolves the newest versions `pyproject.toml` allows on
+Ten jobs in `tests.yml`: `lint`, `docs`, `floor` (resolves every declared dependency at the bottom of
+its window and runs the suite there), `floor-alone` (each install shape with no dev group, at its floors,
+on a Django below 6), `extras` (each install shape at the newest versions it resolves, the backport's on
+Python 3.11 so that it is what loads), `postgres` (the suite where a NUL and half a surrogate pair are
+refused), `test` (the Python x Django matrix), `coverage-badge`, `secrets`, and the `tests-passed` gate
+that branch protection points at. `floor-alone` and `extras` run `scripts/queue_shape.py`, which sends a
+spec from `enqueue` to its row through each queue the install holds. `upstream-drift.yml` resolves the newest versions `pyproject.toml` allows on
 a schedule, which is how a kernel release that breaks this package is found.
 
 Pre-commit runs gitleaks, the standard hygiene hooks, ruff, ty, four convention guards (no local
