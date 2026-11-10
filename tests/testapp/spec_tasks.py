@@ -1,5 +1,3 @@
-"""Found by autodiscovery: a project's ``spec_tasks`` module is where its bindings live."""
-
 from __future__ import annotations
 
 from django_service_specs import SpecRegistry
