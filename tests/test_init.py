@@ -18,9 +18,7 @@ def test_the_root_exports_the_version() -> None:
 
 
 def test_importing_the_package_loads_no_model() -> None:
-    # Django imports the package before a model may be imported, so a re-export that
-    # reaches the model layer breaks every project listing the app. In a fresh process
-    # with no settings at all, because this one has already loaded everything.
+    # Django imports the package before any model; a re-export reaching models breaks projects.
     completed = subprocess.run(
         [
             sys.executable,
@@ -46,9 +44,7 @@ def test_a_lazy_export_is_the_object_its_leaf_holds() -> None:
 
 
 def test_no_export_shares_its_name_with_a_submodule() -> None:
-    # Importing a submodule binds it on the package, and __getattr__ runs only for a name
-    # that is absent, so a lazy export named after a submodule answers with the module
-    # once anything has imported the leaf: the answer depends on import order.
+    # Importing a submodule binds it on the package, and __getattr__ runs only when absent.
     package = Path(django_spec_tasks.__file__).parent
     children = {path.stem for path in package.iterdir() if not path.name.startswith("__")}
     assert children.isdisjoint(django_spec_tasks.__all__)
@@ -99,8 +95,7 @@ def test_the_stub_declares_what_the_root_exports() -> None:
 
 
 def test_the_version_bump_starts_from_the_version_the_package_holds() -> None:
-    # bump-my-version searches version.py for current_version and refuses when it is absent,
-    # which would stop the release commit at its last step.
+    # bump-my-version searches version.py for current_version and refuses when absent.
     pyproject = (Path(django_spec_tasks.__file__).parent.parent / "pyproject.toml").read_text()
     match = re.search(r'^current_version = "(?P<version>[^"]+)"$', pyproject, re.MULTILINE)
 

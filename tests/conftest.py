@@ -1,5 +1,3 @@
-"""Fixtures the whole suite shares. A package's own go in ``tests/<package>/conftest.py``."""
-
 from __future__ import annotations
 
 from collections.abc import Iterator

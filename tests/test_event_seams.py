@@ -1,15 +1,3 @@
-"""What a project's event log can rely on from the binding's three seams.
-
-An event log is a table written inside whatever transaction its writer finds, so a plain
-model stands in for one here: the claims are about transactions and about what crosses
-the row, not about any event package. ``Note`` is the log, and ``_fire`` writes to it the
-way a ``fire()`` would, reading an ambient scope the way an attribution helper does.
-
-``tests/worker/test_transaction.py`` and ``tests/sweep/test_sweep_runs.py`` hold each
-seam's mechanics with counters. These tests hold what a log would see: a row written by
-the service, a row written by ``on_finish``, and which of them survive together.
-"""
-
 from __future__ import annotations
 
 import json
@@ -103,8 +91,7 @@ def attribute(run: Any, principal: Any) -> Generator[None]:
     _trace.append("enter")
     try:
         yield
-        # Not in the ``finally``: a generator the caller never exits is closed when it is
-        # collected, which resets the scope too, so only a normal exit reaches this line.
+        # Not in a finally: a generator the caller never exits is closed on collection too.
         _trace.append("leave")
     finally:
         _scope.reset(token)
@@ -158,10 +145,7 @@ def test_the_callers_correlation_and_the_principal_reach_the_service_through_the
 
     run_spec(run_id)
 
-    # Fails without ``around_run=`` (no scope: actor and correlation absent) and, for the
-    # correlation alone, without ``carry=`` (the row carries nothing to restore).
     assert _events()[0] == {"event": "service.done", "actor": user.pk, "correlation": "corr-1"}
-    # Entered before the service ran and left after it: fails when the seam is never exited.
     assert _trace == ["enter", "fire:service.done", "leave"]
     assert _scope.get() is None
 
@@ -188,8 +172,7 @@ def test_a_worker_killed_before_the_commit_leaves_neither_event_and_a_running_ru
         run_spec(str(run.pk))
 
     run.refresh_from_db()
-    # Fails without the outer transaction: the service's event stays behind, committed by
-    # the kernel's own, with no terminal state to go with it.
+    # Fails without the outer transaction: the event stays, committed by the kernel's own.
     assert run.state == RunState.RUNNING
     assert _events() == []
 
@@ -216,8 +199,6 @@ def test_a_run_that_lost_its_claim_fires_no_finish_event_and_an_atomic_one_no_ev
     run_spec(str(run.pk))
 
     # The finish event is the terminal write's, so it exists if and only if that write did.
-    # Fails without the fence's ``attempts`` (the reclaimed case) or ``state`` (the abandoned
-    # case), and under ``atomic`` without the rollback a lost fence asks for.
     assert [event["event"] for event in _events()] == ([] if atomic else ["service.done"])
 
 
@@ -256,7 +237,6 @@ def test_a_finish_event_the_sweep_wrote_goes_when_its_hook_raises_after_writing_
     report = sweep_runs()
 
     run.refresh_from_db()
-    # Fails when ``on_finish`` runs after the sweep's transaction has closed: the event is
-    # committed, and the row is ``ABANDONED`` beside it or ``RUNNING`` without a reason.
+    # Fails when on_finish runs after the sweep's transaction closed: the event commits anyway.
     assert (run.state, report.errors) == (RunState.RUNNING, 1)
     assert _events() == []
