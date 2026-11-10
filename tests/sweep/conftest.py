@@ -1,5 +1,3 @@
-"""Builders the sweep tests share: a binding over a one-spec registry, a recording backend."""
-
 from __future__ import annotations
 
 import itertools
