@@ -1,5 +1,3 @@
-"""What the worker's tests share: a real binding, a real registry and a real row."""
-
 from __future__ import annotations
 
 import itertools

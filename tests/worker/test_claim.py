@@ -1,5 +1,3 @@
-"""The claim: what stops a second copy of a message running anything."""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -30,11 +28,7 @@ class _Counts:
 
 
 def _during_the_read(monkeypatch: pytest.MonkeyPatch, run: SpecRun, **columns: Any) -> None:
-    """Change the row between the worker's read of it and its claim.
-
-    Finding the binding is what happens between the two, so this is another copy of
-    the message getting there first, with the real claim left to answer.
-    """
+    """Change the row between the worker's read of it and its claim."""
     real = TaskBinding.named
 
     def named(name: str) -> TaskBinding | None:
@@ -107,8 +101,7 @@ def test_a_message_naming_no_row_runs_nothing(make_run: Callable[..., SpecRun]) 
 def test_a_copy_getting_there_between_the_read_and_the_claim_wins(
     make_run: Callable[..., SpecRun], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # The read saw it pending, so only the claim can tell two copies apart. Either of ``state``
-    # and ``attempts`` answers this one; each has a case below that only it answers.
+    # The read saw it pending, so only the claim can tell two copies apart.
     counts = _Counts()
     run = make_run(counts.spec)
     _during_the_read(monkeypatch, run, state=RunState.RUNNING, attempts=F("attempts") + 1)
@@ -123,8 +116,7 @@ def test_a_copy_getting_there_between_the_read_and_the_claim_wins(
 def test_a_row_ended_since_the_read_is_not_claimed(
     make_run: Callable[..., SpecRun], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Fails without ``state`` in the claim: a row ended unclaimed keeps its attempt count, so
-    # ``attempts`` still matches, and a sweep ending a row is the one way there.
+    # Fails without state in the claim: an ended row keeps its attempt count and matches.
     counts = _Counts()
     run = make_run(counts.spec)
     _during_the_read(monkeypatch, run, state=RunState.SPEC_UNAVAILABLE)
@@ -139,8 +131,7 @@ def test_a_row_ended_since_the_read_is_not_claimed(
 def test_a_row_claimed_and_handed_back_since_the_read_is_not_claimed_on_a_stale_count(
     make_run: Callable[..., SpecRun], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Fails without ``attempts`` in the claim: this row is pending again, so ``state``
-    # matches, and the attempt count the worker would fence on is not the row's.
+    # Fails without attempts in the claim: the row is pending again, so state matches alone.
     counts = _Counts()
     run = make_run(counts.spec)
     _during_the_read(monkeypatch, run, attempts=F("attempts") + 1)
@@ -164,8 +155,7 @@ def test_a_claim_touches_only_its_own_row(make_run: Callable[..., SpecRun]) -> N
 
 
 def test_a_new_attempt_starts_with_no_progress(make_run: Callable[..., SpecRun]) -> None:
-    # A row handed back by the sweep still holds what the dead attempt reported, and a reader
-    # would see this attempt's first report as progress going backwards.
+    # A handed-back row keeps the dead attempt's progress; a new attempt must start at none.
     run = make_run(_Counts().spec)
     SpecRun.objects.filter(pk=run.pk).update(attempts=1, progress=0.5, progress_message="old")
 

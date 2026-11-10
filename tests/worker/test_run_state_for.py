@@ -48,8 +48,7 @@ def test_the_expectations_below_name_every_refusal_the_kernel_has() -> None:
 
 @pytest.mark.parametrize("error", built_refusals(), ids=lambda error: type(error).__name__)
 def test_each_refusal_has_its_state(error: DispatchError | ServiceError) -> None:
-    # Coverage reads the table as one expression, and a deleted row whose base answers
-    # still passes the check above, so each row is held here by its own case.
+    # Coverage reads the table as one expression, so each row is held by its own case.
     assert run_state_for(error) == _EXPECTED[type(error)]
 
 
