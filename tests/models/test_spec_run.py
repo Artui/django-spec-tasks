@@ -78,8 +78,7 @@ def test_every_state_fits_its_column() -> None:
 
 @pytest.mark.django_db
 def test_output_and_refusal_detail_take_what_a_presenter_and_a_refusal_produce() -> None:
-    # A spec with no presenter hands its value back as it is, and a refusal's messages
-    # may be lazy; the default JSON encoder raises on both.
+    # A spec with no presenter hands its value back as is, and refusal messages may be lazy.
     run = _run(
         output={"total": Decimal("10.50")},
         refusal_detail={"order": [gettext_lazy("This field is required.")]},
