@@ -1,5 +1,3 @@
-"""Run a django-service-specs spec as a background task."""
-
 import importlib
 
 from django_spec_tasks.binding.task_binding import TaskBinding
