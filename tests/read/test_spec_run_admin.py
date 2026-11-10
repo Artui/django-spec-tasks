@@ -1,5 +1,3 @@
-"""The admin shows runs and changes nothing."""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -108,8 +106,7 @@ def test_the_change_view_shows_the_traceback_and_hides_the_payloads(
 def test_a_hidden_payload_cannot_be_queried_through_the_url(
     admin_client: Client, run: SpecRun, query: dict[str, str]
 ) -> None:
-    # A count of results answers a guess, so a value is recoverable a character at a time by
-    # anyone who may view the list, without ever being shown it.
+    # A count of results answers a guess, so a hidden value leaks a character at a time.
     response = admin_client.get(_urls(run)["list"], query)
 
     assert response.status_code == 400
@@ -178,8 +175,7 @@ def test_a_subclass_may_show_the_payloads_and_still_changes_nothing(
 
 
 def test_a_site_wide_action_is_not_offered_either(admin_client: Client, run: SpecRun) -> None:
-    # An action registered on the site needs no permission to be listed, so only the
-    # admin's own ``actions = None`` keeps it off this list.
+    # An action on the site needs no permission to be listed; only actions = None keeps it off.
     def noop(modeladmin: object, request: object, queryset: object) -> None: ...
 
     admin.site.add_action(noop, "noop")
