@@ -1,5 +1,3 @@
-"""Neither queue is a dependency: the package has to import, and enqueue, with neither installed."""
-
 from __future__ import annotations
 
 import subprocess
