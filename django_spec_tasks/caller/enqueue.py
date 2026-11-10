@@ -25,33 +25,7 @@ def enqueue(
     *,
     actor: Any,
 ) -> str:
-    """Record a run of ``spec_name`` and ask the binding's backend to execute it on commit.
-
-    Everything that can be refused while the caller is still on the stack is refused here,
-    and a refusal writes no row and sends nothing. What is left is decided by the worker,
-    which checks again through the kernel's ``dispatch``: a grant cannot cross a process,
-    so none is carried.
-
-    ``actor`` is required. ``None`` is the declared system run, which a spec admits or
-    refuses by its own permissions; leaving it out is a ``TypeError``, so an unauthenticated
-    call cannot become a system run by omission.
-
-    The Validator does not run here. A stock one queries, needs the row it acts on, and its
-    answer would not hold by the time a worker ran.
-
-    Returns:
-        The run's id, as a string. A backend that carries a task id is given this one.
-
-    Raises:
-        LookupError: The binding's registry holds no spec of that name.
-        TypeError: The spec takes a ``file`` parameter; ``actor`` is a principal with no
-            primary key (an anonymous user); or ``params`` or the carried values would
-            change on their way through JSON.
-        PrincipalUnavailable: ``actor`` is deactivated.
-        InvalidArguments: ``params`` do not fit the spec.
-        NotPermitted: ``actor`` fails the spec's class-level permissions.
-        ImproperlyConfigured: A parameter collides with one of the binding's pool seeds.
-    """
+    """Record a run of ``spec_name`` and ask the binding's backend to execute it on commit."""
     registered = binding.registry.get(spec_name)
     if registered is None:
         raise LookupError(f"Binding {binding.name!r} has no spec named {spec_name!r}.")
@@ -72,8 +46,6 @@ def enqueue(
     carried = dict(binding.carry(actor)) if binding.carry is not None else {}
     _require_json_round_trip(carried, "carried value")
 
-    # The grant and the seeds the checks resolved are discarded: neither crosses a process,
-    # and the worker resolves its own.
     check_call(
         spec,
         principal=actor,
@@ -94,9 +66,6 @@ def enqueue(
         state=RunState.PENDING,
     )
     run_id = str(run.pk)
-    # robust: a broker down at commit would otherwise raise out of this callback and cancel
-    # every later one the project registered in the same transaction, while the row already
-    # makes the lost message recoverable.
     transaction.on_commit(lambda: binding.backend.enqueue(run_id), using=alias, robust=True)
     return run_id
 
@@ -113,13 +82,7 @@ def _file_parameters(parameters: Parameters, prefix: str = "") -> Iterator[str]:
 
 
 def _require_json_round_trip(values: Mapping[str, Any], label: str) -> None:
-    """Refuse a value that JSON would change or cannot carry, naming its key.
-
-    A queue stores JSON, and what it hands a worker is what survived: a tuple comes back a
-    list, bytes a string, an integer key a string. Django Tasks accepts some of those
-    without complaint, so a backend's own gate is not this check. ``inf``, a NUL and half a
-    surrogate pair survive the round trip and fail the write, where ``TypeError`` is promised.
-    """
+    """Refuse a value that JSON would change or cannot carry, naming its key."""
     for key, value in values.items():
         if not isinstance(key, str):
             raise TypeError(f"The {label} key {key!r} is not a string, and JSON keys are.")

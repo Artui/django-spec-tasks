@@ -23,13 +23,6 @@ class DjangoSpecTasksConfig(AppConfig):
 
 
 def _register_celery_task() -> None:
-    """Import the Celery backend whenever ``celery`` is installed.
-
-    A Celery worker runs a message by looking its name up in its own registry, so the
-    task has to be registered by importing the module, in that worker, at startup. The
-    module imports ``celery`` at its top, so the import is gated on the optional
-    dependency being there, and asking first rather than catching ``ImportError`` keeps
-    a broken backend module from reading as an absent queue.
-    """
+    """Import the Celery backend whenever ``celery`` is installed."""
     if find_spec("celery") is not None:
         import_module("django_spec_tasks.backends.celery_backend")

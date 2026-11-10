@@ -11,17 +11,7 @@ from django.db import DEFAULT_DB_ALIAS, router
 def check_spec_run_on_default_alias(
     app_configs: Sequence[AppConfig] | None, **kwargs: Any
 ) -> list[CheckMessage]:
-    """Refuse a database router sending ``SpecRun`` away from the default alias.
-
-    The kernel's ``atomic`` opens on the default alias, and a run's guarantee is that
-    the service's writes and its terminal state commit together, which needs the row in
-    that transaction. Reads count as well: a worker or a caller reading a run from a
-    replica sees a state the row has already left.
-
-    Registered with no tag, because a ``Tags.database`` check runs only when ``check``
-    is told to look at a database. It reads the model from the app registry, since
-    ``apps.py`` imports this module before a model may be imported.
-    """
+    """Refuse a database router sending ``SpecRun`` away from the default alias."""
     spec_run = apps.get_model("django_spec_tasks", "SpecRun")
     routed = {"writes": router.db_for_write(spec_run), "reads": router.db_for_read(spec_run)}
     return [

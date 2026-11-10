@@ -5,13 +5,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True, kw_only=True)
 class SweepReport:
-    """What one sweep did, counted by outcome.
-
-    ``reasked`` is a backend call and not a transition: a ``PENDING`` row the queue
-    seems to have lost stays ``PENDING``. ``requeued``, ``abandoned`` and ``unavailable``
-    are transitions. ``errors`` counts rows left as they were because a backend or an
-    ``on_finish`` raised.
-    """
+    """What one sweep did, counted by outcome."""
 
     reasked: int = 0
     requeued: int = 0
