@@ -1,5 +1,3 @@
-"""What each refusal leaves on the row, from a real dispatch."""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -176,8 +174,7 @@ def test_an_exception_nobody_declared_is_a_failure_with_its_traceback(
 def test_a_deactivated_principal_lapses_at_the_worker_s_own_resolver(
     make_run: Callable[..., SpecRun], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # An open spec, so no permission check can answer, and dispatch is never reached: only
-    # the resolver can be what stopped it.
+    # An open spec, so only the principal resolver can be what stopped the run.
     dispatched: list[Any] = []
     monkeypatch.setattr(
         "django_spec_tasks.worker.run_spec.dispatch", lambda *a, **k: dispatched.append(a)
@@ -232,8 +229,7 @@ def test_a_deleted_principal_lapses(make_run: Callable[..., SpecRun]) -> None:
 def test_a_lapsed_principal_s_identifier_stays_out_of_what_a_reader_is_shown(
     make_run: Callable[..., SpecRun], deactivated: bool
 ) -> None:
-    # read_run shows refusal_detail to whoever can_read lets in, and never actor_pk. The
-    # kernel's resolver puts the identifier in its words.
+    # read_run shows refusal_detail to whoever can_read lets in, and never actor_pk.
     user = User.objects.create(username="reader-must-not-learn-this")
     run = make_run(
         ServiceSpec(service=lambda: None, permissions=[Unrestricted()]),

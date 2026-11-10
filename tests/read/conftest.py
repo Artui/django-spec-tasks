@@ -1,5 +1,3 @@
-"""Builders the read tests share."""
-
 from __future__ import annotations
 
 from collections.abc import Callable

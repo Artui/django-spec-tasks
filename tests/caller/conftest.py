@@ -1,5 +1,3 @@
-"""What the caller's half is tested against: real specs, a recording backend, real users."""
-
 from __future__ import annotations
 
 from typing import Any

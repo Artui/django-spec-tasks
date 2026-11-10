@@ -1,5 +1,3 @@
-"""Models the suite's services write. No migrations, so the test database syncs them."""
-
 from __future__ import annotations
 
 from django.db import models

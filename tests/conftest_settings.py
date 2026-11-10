@@ -1,29 +1,3 @@
-"""Settings for the test suite.
-
-SQLite unless Postgres is asked for, and no DRF anywhere: the kernel this package serves
-exists for dispatch without it, and a suite that could import it could not notice either
-package reaching for it.
-
-On SQLite the test database is a **file**, not ``:memory:``. An in-memory SQLite database is per
-connection, and Django's connections are per thread, so a second connection would land
-on a database with no tables. The name is built at import so it holds no machine's path,
-and carries the process id so two runs never share a file.
-
-``progress`` is a second alias on that same file: another connection, which is what a
-progress write through ``progress_using`` needs to be visible from outside a transaction.
-A test using it says so with ``databases=``. SQLite serialises writers, so a write through
-it while ``default`` holds the write lock fails, and the short timeout makes that fast.
-
-``SPEC_TASKS_TEST_DATABASE=postgres`` selects Postgres, read from the ``PG*`` variables libpq
-itself reads, which is the CI cell and how to run it by hand. SQLite stores a NUL and half a
-surrogate pair in a JSON column and Postgres refuses them, so a value nothing guards fails its
-write only there.
-``progress`` is the same second connection, with the same settings as ``default``: Django gives
-two aliases of one signature a single test database, as it does on the SQLite file. Any other
-value of the variable is refused, because a misspelling must not read as a green Postgres run
-that ran on SQLite.
-"""
-
 from __future__ import annotations
 
 import os

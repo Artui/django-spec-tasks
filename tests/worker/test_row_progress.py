@@ -1,5 +1,3 @@
-"""Progress: on the row, fenced, and never the reason a run ends."""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -161,10 +159,7 @@ def test_a_failed_write_inside_a_run_leaves_the_run_able_to_finish(
 def test_a_failed_write_keeps_the_service_s_work(
     make_run: Callable[..., SpecRun], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # A database error inside ``update`` marks the open transaction broken unless a savepoint
-    # took it. Fails without the savepoint: the kernel's own ``atomic`` rolls the note back as
-    # the service returns, and raises nothing, so the run still ends ``SUCCEEDED``. Raised at
-    # the compiler, under ``update``'s own guard, because that guard does the marking.
+    # A database error in update breaks the transaction unless a savepoint took it.
     refused: list[bool] = []
     real = SQLUpdateCompiler.execute_sql
 

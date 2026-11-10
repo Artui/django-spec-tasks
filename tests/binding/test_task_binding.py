@@ -38,8 +38,7 @@ def test_a_name_a_registry_and_a_backend_are_enough() -> None:
 
 
 def test_resolve_actor_defaults_to_the_kernel_s_function_unbound() -> None:
-    # A plain function as a class-level default would bind as a method if the field were
-    # ever read from the class's attribute rather than the instance's.
+    # A plain function as a class-level default would bind as a method if read from the class.
     assert _binding().resolve_actor is resolve_principal
 
 

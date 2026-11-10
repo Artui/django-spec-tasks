@@ -1,5 +1,3 @@
-"""Fixtures for the two backends: a stand-in for the worker's entry point, and a task framework."""
-
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator

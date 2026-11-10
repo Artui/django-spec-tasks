@@ -1,5 +1,3 @@
-"""What the package may import, read from its source rather than from what happens to load."""
-
 from __future__ import annotations
 
 import ast
@@ -54,8 +52,7 @@ def imports_out_of_bounds(root: Path) -> list[str]:
 
 
 def _copy_with(tmp_path: Path, relative: str, line: str) -> Path:
-    # A copy of the real package, one file changed, so each test below is the ratchet
-    # refusing a file it had just accepted.
+    # A copy of the real package with one file changed, so each test is the ratchet refusing it.
     root = tmp_path / "copy"
     shutil.copytree(_PACKAGE, root, ignore=shutil.ignore_patterns("__pycache__"))
     target = root / relative

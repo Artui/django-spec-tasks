@@ -1,5 +1,3 @@
-"""What one outer transaction promises, and what ``atomic=False`` does not."""
-
 from __future__ import annotations
 
 from collections.abc import Callable, Generator
@@ -52,11 +50,7 @@ def _spec(*, atomic: bool, presenter: Presenter | None = None) -> ServiceSpec:
 
 
 def _spec_losing_the_fence(*, atomic: bool, **columns: Any) -> tuple[ServiceSpec, list[Any]]:
-    """A spec whose service moves its own run on, as a sweep or another worker would.
-
-    On the worker's own connection, because SQLite would refuse a second writer: what
-    is under test is what the fence does about it, not how the row came to move.
-    """
+    """A spec whose service moves its own run on, as a sweep or another worker would."""
     run_ids: list[Any] = []
 
     def service() -> None:
@@ -111,7 +105,6 @@ def test_a_kill_under_atomic_false_leaves_the_work_and_a_running_run(
     [
         # Fails without ``attempts`` in the fence: the row is running, under a later claim.
         {"attempts": 2},
-        # Fails without ``state`` in the fence: the same attempt, ended by a sweep.
         {"state": RunState.ABANDONED},
     ],
     ids=["reclaimed", "abandoned"],
@@ -128,8 +121,6 @@ def test_a_lost_fence_rolls_an_atomic_run_back(
 
     run_spec(str(run.pk))
 
-    # The move rolled back with the rest, so the row is as the claim committed it: what
-    # this holds is that nothing of this attempt's survives, and that nothing fired.
     assert Note.objects.count() == 0
     assert finished == []
     assert str(run.pk) in caplog.text
@@ -220,8 +211,7 @@ def test_only_an_atomic_spec_runs_inside_a_transaction(
 def test_a_spec_presents_in_a_transaction_only_when_atomic(
     make_run: Callable[..., SpecRun], atomic: bool
 ) -> None:
-    # Held apart from the service: the kernel never opens a transaction around a presenter,
-    # so the in-the-service case above could not see an outer one that closed early.
+    # Kept apart from the service: the kernel never opens a transaction around a presenter.
     seen: list[bool] = []
 
     class Looks(Presenter):
@@ -240,8 +230,7 @@ def test_a_spec_presents_in_a_transaction_only_when_atomic(
 
 
 def test_a_selector_runs_outside_a_transaction(make_run: Callable[..., SpecRun]) -> None:
-    # Fails without the type check on the way to ``spec.atomic``: a selector spec has no
-    # such field.
+    # Fails without the type check on the way to ``spec.atomic``: a selector spec has no such field.
     seen: list[bool] = []
 
     def selector() -> dict[str, str]:
@@ -266,8 +255,7 @@ def test_a_refusal_rolls_the_work_back_and_commits_its_state_and_what_it_fired(
         Note.objects.create(text="the service's work")
         raise ServiceError("no")
 
-    # Not ``atomic`` on the kernel's own: a presenter raising is what only the outer
-    # transaction takes back, which the next test holds.
+    # A presenter raising is what only the outer transaction takes back.
     run = make_run(
         ServiceSpec(service=service, permissions=[Unrestricted()]),
         on_finish=lambda row: Note.objects.create(text=f"fired {row.state}"),

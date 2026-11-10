@@ -1,5 +1,3 @@
-"""Each row of the sweep table, and the guards each conjunct of a decision hangs on."""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -91,7 +89,6 @@ def test_a_finished_run_is_never_asked_for(
     # Names the state conjunct of the pending branch: an old, finished row has the age.
     binding = make_binding()
     run = make_run(binding, state=state, created_at=ago(days=3), finished_at=ago(days=2))
-    # The binding has a pending row of its own, which is what puts its grace in the query.
     make_run(binding, created_at=ago(minutes=1))
 
     report = sweep_runs()
@@ -145,8 +142,7 @@ def test_an_idempotent_lapse_out_of_attempts_is_abandoned(
 def test_a_lapse_not_declared_idempotent_is_abandoned(
     make_binding: MakeBinding, lapsed: MakeRun, backend: RecordingBackend, idempotent: bool | None
 ) -> None:
-    # Names ``idempotent is True``: ``None`` is undeclared and must not read as ``True``,
-    # and attempts are at zero so only the declaration can be what decides.
+    # idempotent is True is named: None is undeclared, not True, and attempts are zero.
     binding = make_binding(idempotent=idempotent)
     run = lapsed(binding, attempts=0)
 
@@ -197,8 +193,7 @@ def test_a_running_run_with_no_lease_is_left_alone(
 def test_a_finished_run_with_an_old_lease_is_left_alone(
     make_binding: MakeBinding, make_run: MakeRun, lapsed: MakeRun, state: RunState
 ) -> None:
-    # Names ``state == RUNNING``: a finished run keeps the lease it held. The young pending row
-    # is what makes the sweep walk this binding at all.
+    # Names ``state == RUNNING``: a finished run keeps the lease it held.
     binding = make_binding(idempotent=True)
     make_run(binding)
     run = lapsed(binding, state=state, finished_at=ago(hours=1))
@@ -233,9 +228,7 @@ def test_idempotent_is_read_from_the_spec_as_it_is_now(
     entry = binding.registry.get(SPEC)
     assert entry is not None
     run = lapsed(binding, attempts=0)
-    # The registry the binding serves is replaced after the run was written, as a deploy
-    # that changed the declaration would. A copy of ``idempotent`` on the row would still
-    # say True here.
+    # The declaration changes after the run is written, as on a deploy; a copy would stay True.
     object.__setattr__(
         binding, "registry", binding.registry.replace(SPEC, entry.spec.derive(idempotent=False))
     )
@@ -364,8 +357,7 @@ def test_a_row_the_sweep_ends_carries_the_package_version(
 def test_a_pending_run_whose_binding_is_gone_waits_out_the_default_grace(
     make_run: MakeRun,
 ) -> None:
-    # A binding that is not known has no grace of its own, so the default stands in: a
-    # sweep on stale code must not end a binding's runs the moment they are written.
+    # An unknown binding has no grace of its own, so the default stands in for it.
     young = make_run("never-registered", created_at=ago(minutes=9))
     old = make_run("never-registered", created_at=ago(minutes=11))
 
@@ -408,8 +400,7 @@ class Mover:
 def test_a_row_that_moved_since_the_batch_was_read_is_not_overwritten_state(
     make_binding: MakeBinding, lapsed: MakeRun
 ) -> None:
-    # The first row's ``on_finish`` runs while the batch holds the second as it was. The
-    # second finishes meanwhile; the fence's ``state`` is what refuses the sweep.
+    # The first row's ``on_finish`` runs while the batch holds the second as it was.
     mover = Mover(state=RunState.SUCCEEDED)
     binding = make_binding(idempotent=True, on_finish=mover)
     first = lapsed(binding, attempts=3, lease_expires_at=ago(hours=5))
@@ -443,8 +434,7 @@ def test_a_row_reclaimed_since_the_batch_was_read_is_not_overwritten_attempts(
 def test_a_row_that_finished_since_the_batch_was_read_is_not_requeued(
     make_binding: MakeBinding, lapsed: MakeRun, backend: RecordingBackend
 ) -> None:
-    # The requeue is fenced as an ending is: a worker that finished the run first wins,
-    # and the backend is not asked for a run that is done.
+    # The requeue is fenced as an ending is, so a run finished first wins and is not requeued.
     mover = Mover(state=RunState.SUCCEEDED)
     binding = make_binding(idempotent=True, on_finish=mover)
     lapsed(binding, attempts=3, lease_expires_at=ago(hours=5))
@@ -520,8 +510,7 @@ def test_a_workers_late_terminal_write_after_the_sweep_moved_the_row_is_refused(
     ends: int,
     asked: int,
 ) -> None:
-    # The real worker and the real sweep. The lease runs out while the service works and the
-    # sweep answers the row, so what the worker writes as it returns is the late write.
+    # The real worker and the real sweep.
     def service() -> str:
         SpecRun.objects.filter(state=RunState.RUNNING).update(lease_expires_at=ago(minutes=1))
         sweep_runs()
@@ -607,8 +596,7 @@ def test_on_finish_runs_inside_the_transaction_with_the_write(
 
     sweep_runs()
 
-    # Under ``transaction=True`` nothing else has opened an atomic block, so seeing one
-    # here is the sweep's own.
+    # Under transaction=True nothing else opens an atomic block, so one seen here is the sweep's.
     assert finished.seen == [(str(run.pk), "ABANDONED", True, True)]
 
 
@@ -642,8 +630,7 @@ def test_paging_asks_each_row_once_and_does_not_revisit_a_requeued_row(
 def test_a_requeued_row_is_not_asked_for_again_in_the_same_sweep_with_no_grace(
     make_binding: MakeBinding, lapsed: MakeRun, backend: RecordingBackend
 ) -> None:
-    # Lapsed rows are read first, so a row they send back must not read as a lost one when the
-    # pending rows are read next. Its ask is later than the moment the sweep measures from.
+    # A row sent back is read later than the sweep's measure, so it must not read as lost.
     run = lapsed(make_binding(idempotent=True, grace=timedelta(0)))
 
     report = sweep_runs()
@@ -774,8 +761,7 @@ def test_an_old_row_asked_for_recently_is_left_alone(
 def test_a_row_a_backend_refused_waits_out_its_grace_too(
     make_binding: MakeBinding, make_run: MakeRun, backend: RecordingBackend
 ) -> None:
-    # Stamped before the ask: a queue that is down is not hammered, and the row goes to the
-    # back of the line rather than holding the budget of every sweep until it recovers.
+    # Stamped before the ask: a queue that is down is not hammered, and the row goes to the back.
     run = make_run(make_binding(), created_at=ago(hours=1))
     backend.refuse.add(str(run.pk))
 
@@ -817,8 +803,7 @@ def test_a_binding_with_a_dead_queue_cannot_use_another_binding_s_budget(
 def test_a_hook_that_always_raises_keeps_its_row_running_and_counted(
     make_binding: MakeBinding, lapsed: MakeRun
 ) -> None:
-    # The sweep calls the same hook the worker did, so no later sweep can end this row until
-    # the hook stops raising. The operating page says so.
+    # The sweep calls the hook the worker did, so no sweep ends the row while it raises.
     run = lapsed(make_binding(on_finish=_broken))
 
     for _ in range(3):

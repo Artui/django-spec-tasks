@@ -1,5 +1,3 @@
-"""The two commands: what they print, what they require, what a limit bounds."""
-
 from __future__ import annotations
 
 from collections.abc import Callable

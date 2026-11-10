@@ -1,5 +1,3 @@
-"""What a finished run leaves on the row: the presented output, its bound, its identity."""
-
 from __future__ import annotations
 
 import json
@@ -109,8 +107,7 @@ def test_output_one_byte_over_the_bound_is_refused_and_never_truncated(
 
 
 def test_the_bound_measures_what_the_column_writes(make_run: Callable[..., SpecRun]) -> None:
-    # Six bytes each as JSON writes them, two each as UTF-8, so measuring the
-    # text rather than the encoding passes this.
+    # Six bytes each as JSON writes them, two each as UTF-8: measuring the text passes this.
     value = "é" * 10
     run = make_run(_service_returning(value), max_output_bytes=_encoded_size(value) - 1)
 
@@ -160,8 +157,7 @@ def test_output_no_json_can_hold_is_a_failure_and_rolls_back(
 def test_a_float_json_cannot_write_is_a_failure_and_not_a_stuck_run(
     make_run: Callable[..., SpecRun],
 ) -> None:
-    # The default encoder writes it as a bare word no JSON column stores, so the write
-    # would raise past every handler and leave the run for the sweep.
+    # The default encoder writes a bare word no JSON column stores; the write would raise.
     run = make_run(_service_returning({"ratio": float("nan")}))
 
     run_spec(str(run.pk))
@@ -184,8 +180,7 @@ def test_a_float_json_cannot_write_is_a_failure_and_not_a_stuck_run(
 def test_output_a_json_column_cannot_hold_is_a_failure_and_not_a_stuck_run(
     make_run: Callable[..., SpecRun], output: Any, atomic: bool
 ) -> None:
-    # SQLite stores one and Postgres raises at the terminal write, past every handler, which
-    # leaves the row RUNNING with its work committed under atomic=False.
+    # SQLite stores it and Postgres raises at the terminal write, leaving the row RUNNING.
     run = make_run(_service_returning(output, atomic=atomic))
 
     run_spec(str(run.pk))
@@ -202,8 +197,7 @@ def test_output_a_json_column_cannot_hold_is_a_failure_and_not_a_stuck_run(
 def test_text_that_only_reads_like_something_unstorable_is_stored(
     make_run: Callable[..., SpecRun], text: str
 ) -> None:
-    # A backslash followed by the letters, or a whole surrogate pair: their JSON holds the same
-    # characters, and every database stores them. A bare substring test refuses them.
+    # Backslash-letters and surrogate pairs are stored as JSON holds them, not refused.
     run = make_run(_service_returning({"text": text}))
 
     run_spec(str(run.pk))
@@ -244,8 +238,7 @@ def test_a_selector_finding_nothing_is_a_result(make_run: Callable[..., SpecRun]
 def test_a_service_whose_target_is_gone_is_refused_and_never_reads_as_succeeded(
     make_run: Callable[..., SpecRun], atomic: bool
 ) -> None:
-    # The kernel answers a missing target with a result rather than raising, and the service
-    # never ran, so a refund of a deleted order must not read as a refund that happened.
+    # A missing target answers with a result; a refund of a deleted order must not read as done.
     called: list[bool] = []
     finished: list[str] = []
     target = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: None)

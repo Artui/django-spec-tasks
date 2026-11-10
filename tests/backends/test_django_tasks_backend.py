@@ -59,8 +59,7 @@ class TestTheTwoPathImport:
 
 class TestTheTaskBody:
     def test_it_resolves_by_its_dotted_path_to_the_task_itself(self) -> None:
-        # A worker imports this path and refuses anything that is not a Task, which a plain
-        # function is; a nested function has no path at all.
+        # A worker imports this path and refuses anything not a Task; a nested function has no path.
         task = django_tasks_backend._run_spec
         assert import_string(task.module_path) is task
         assert task.name == "_run_spec"
@@ -82,8 +81,7 @@ class TestTheDummyBackend:
     def test_a_stored_result_can_be_copied_and_found_again_by_its_path(
         self, tasks: Callable[..., Any]
     ) -> None:
-        # What a database worker does with a row: rebuild the task from its path. Rebuilding
-        # fails when the path names a function and not a Task.
+        # What a database worker does with a row: rebuild the task from its path.
         handler = tasks(default=_DUMMY)
         DjangoTasksBackend().enqueue("run-1")
         copied = copy.deepcopy(handler["default"].results[0])

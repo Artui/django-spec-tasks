@@ -1,5 +1,3 @@
-"""Retention deletes finished rows and nothing else."""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -38,8 +36,7 @@ def test_a_finished_run_inside_the_age_stays(make_run: MakeRun) -> None:
 
 @pytest.mark.parametrize("state", LIVE)
 def test_a_live_run_stays_however_old(make_run: MakeRun, state: RunState) -> None:
-    # Names the state conjunct: the live row carries an old ``finished_at`` as well as an
-    # old ``created_at``, so only its state can be what saves it.
+    # The live row has an old finished_at and created_at, so only its state can save it.
     make_run("b", state=state, created_at=ago(days=400), finished_at=ago(days=300))
 
     assert prune_runs(older_than=timedelta(days=30)) == 0

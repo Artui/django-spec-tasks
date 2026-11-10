@@ -1,5 +1,3 @@
-"""Who may read a run, what they are shown, and that no refusal tells ids apart."""
-
 from __future__ import annotations
 
 import uuid
@@ -189,8 +187,6 @@ def test_no_refusal_tells_a_stranger_from_an_id_that_is_nothing(
     ids = {
         "unknown": str(uuid.uuid4()),
         "malformed": "not-a-uuid",
-        # The id exists and the owner is reading it: only the binding is wrong, so one
-        # binding's ``can_read`` cannot be used to read another's runs.
         "other_binding": str(elsewhere.pk),
     }
 

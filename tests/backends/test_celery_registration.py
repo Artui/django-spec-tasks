@@ -1,11 +1,3 @@
-"""The trap this package's Celery task is built around, held in a process that knows nothing.
-
-A Celery worker runs a message by looking its name up in its own registry. A task defined
-inside ``enqueue`` is registered only in a process that has already called ``enqueue``, so it
-passes every test that sends and runs in one process and is missing in every real worker.
-Only a process that starts cold, as a worker does, can tell.
-"""
-
 from __future__ import annotations
 
 import shutil
@@ -48,10 +40,7 @@ def test_a_cold_process_that_only_calls_django_setup_finds_the_task_registered()
 
 
 def test_the_probe_sees_a_task_built_inside_a_function_as_missing(tmp_path: Path) -> None:
-    # The same copy of the package with the task moved inside a function, which is where a
-    # task built "when it is needed" ends up: the module imports, a test that sends and runs
-    # in one process passes, and a cold process finds nothing. Without this, the probe above
-    # would pass whatever it was looking at.
+    # The package copied with the task moved into a function, where a lazily built task ends up.
     copy = tmp_path / "copy"
     shutil.copytree(
         _REPOSITORY,
