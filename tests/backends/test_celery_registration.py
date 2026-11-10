@@ -31,7 +31,7 @@ print({_NAME!r} in current_app.tasks)
 
 
 def _registered_in_a_cold_process(root: Path) -> bool:
-    """Whether a process that only runs ``django.setup()`` finds the task, importing from ``root``."""
+    """Whether a process that only runs ``django.setup()`` finds the task, importing ``root``."""
     completed = subprocess.run(
         [sys.executable, "-c", _COLD_START],
         cwd=root,
