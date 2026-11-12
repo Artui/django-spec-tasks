@@ -10,7 +10,20 @@ from django_spec_tasks.types.run_state import RunState
 
 
 class SpecRun(models.Model):
-    """One call of a spec: what was asked, whose claim it is under, and how it ended."""
+    """One call of a spec: what was asked, whose claim it is under, and how it ended.
+
+    Every column is the call or the queue's bookkeeping about it, and none copies a
+    declaration: ``idempotent`` and ``atomic`` are read from the registered spec. All
+    of them land in the first migration, since a column added later is empty for every
+    earlier run.
+
+    ``output`` and ``refusal_detail`` hold what a presenter and a refusal produced, so
+    they encode through ``DjangoJSONEncoder``: a refusal's messages may be lazy strings,
+    and a spec with no presenter hands back its value as it is. ``params`` and ``carried``
+    keep the default encoder, because enqueue asserts that they survive a JSON round trip.
+
+    ``state`` is indexed by the three composite indexes, each leading on it.
+    """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     binding = models.CharField(max_length=255)

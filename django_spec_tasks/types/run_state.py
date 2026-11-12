@@ -4,7 +4,15 @@ from django.db import models
 
 
 class RunState(models.TextChoices):
-    """Where a run is. ``PENDING`` and ``RUNNING`` are live; the rest are terminal."""
+    """Where a run is. ``PENDING`` and ``RUNNING`` are live; the rest are terminal.
+
+    A state stays coarse: the row's ``refusal_class`` and ``refusal_code`` say which
+    refusal ended a run. The whole table lands in the first release, because a state
+    added later is missing from every run before it.
+
+    Each value spells its name, so a value read back off a row as a plain string
+    compares equal and hashes equal, and ``run.state in TERMINAL_STATES`` holds.
+    """
 
     PENDING = "PENDING", "Pending"
     RUNNING = "RUNNING", "Running"

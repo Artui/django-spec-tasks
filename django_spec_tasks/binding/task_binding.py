@@ -13,7 +13,43 @@ from django_spec_tasks.types.task_backend import TaskBackend
 
 @dataclass(frozen=True, kw_only=True, eq=False)
 class TaskBinding:
-    """A registry served as background tasks, with everything a queue needs beside it."""
+    """A registry served as background tasks, with everything a queue needs beside it.
+
+    Collaborators are objects passed here, never dotted paths in settings. A seam
+    that takes a run is handed the ``SpecRun`` row, typed ``Any`` because nothing here
+    imports a model: that is what keeps this class importable before the app registry
+    is ready.
+
+    Constructing one registers it under its name, since a worker has only the name a
+    row recorded. Autodiscovery of each installed app's ``spec_tasks`` module is what
+    makes every binding known in a worker that imported Django.
+
+    Attributes:
+        name: Recorded on every row, so it must not change while runs are pending.
+        registry: Where enqueue and the worker find a spec by name.
+        backend: Where a run's code executes.
+        resolve_actor: Turns a row's ``actor_pk`` into the principal. Raises
+            ``PrincipalUnavailable`` for anyone who may no longer act.
+        pool_seeds: The same set at enqueue and in the worker, so the prelude's seed
+            check agrees between them.
+        lease: How long a claimed run may take. Sized to the binding's longest run: a
+            worker past it is refused at its terminal write.
+        grace: How long a ``PENDING`` row waits, from the last time a backend was asked for
+            it, before the sweep asks again. Sized to how long the queue may back up: each
+            ask past it is one more message.
+        max_attempts: How many claims an idempotent run gets before it is abandoned.
+        max_output_bytes: Past this, a run ends ``OUTPUT_TOO_LARGE``. Output is never
+            truncated.
+        can_read: ``(principal, run) -> bool``, consulted beside the run's owner.
+        progress_using: A database alias progress is written through, which is what
+            makes it visible during an ``atomic=True`` run. A second connection to the same
+            database: on any other it finds no row, and writes nothing.
+        carry: ``(actor) -> JSON mapping``, recorded on the row at enqueue and handed
+            to the call context in both processes.
+        around_run: ``(run, principal) -> context manager`` around ``dispatch`` and
+            ``present``.
+        on_finish: ``(run) -> None``, inside the transaction of the terminal write.
+    """
 
     name: str
     registry: SpecRegistry
@@ -44,7 +80,11 @@ class TaskBinding:
 
     @classmethod
     def named(cls, name: str) -> TaskBinding | None:
-        """The binding registered under ``name``, or ``None``."""
+        """The binding registered under ``name``, or ``None``.
+
+        A row naming no binding is a rolling deploy rather than a bug, so an unknown
+        name is an answer here and not an exception.
+        """
         return TaskBinding._registered.get(name)
 
     @classmethod
