@@ -9,7 +9,7 @@ own paths because each imports an optional queue. Kernel names a binding reads, 
 
 Registered by the app's config, so a project gets them by listing `"django_spec_tasks"` in `INSTALLED_APPS`.
 
-- **`django_spec_tasks.E001`**: a database router sends `SpecRun` away from the default alias. The kernel's
+- **`django_spec_tasks.E001`**: a database router sends `SpecRun` away from the default alias, for reads or for writes. The kernel's
   transaction opens on the default alias, and the worker needs the row inside it.
 
 ## Management commands

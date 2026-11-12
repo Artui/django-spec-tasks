@@ -4,6 +4,7 @@
 
 ### Changed
 - The API reference's docstrings are restored.
+- The operating and worker pages state the defaults of `lease`, `max_attempts` and `max_output_bytes`, and the E001 entry says a router is refused for reads as well as writes.
 
 ## [0.1.0] — 2026-11-08
 

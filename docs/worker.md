@@ -97,6 +97,7 @@ raises itself does: a refund of a deleted order must not read as a refund that h
 with `{"size": ..., "limit": ...}` in `refusal_detail`, and `output` stays null. Under `atomic=True` the work
 rolls back with it, so the caller reads a clean refusal. Under `atomic=False` the work stands, and the state
 says the result was not stored. Output is never truncated.
+The limit is the binding's `max_output_bytes`, which defaults to 1 MiB.
 
 Output a JSON column cannot hold, which is a presenter's bug, ends `FAILED`, as any exception nobody declared
 does. That counts `NaN`, `inf`, a NUL character and half a surrogate pair, which Postgres refuses and SQLite

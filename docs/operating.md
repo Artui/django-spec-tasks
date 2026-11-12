@@ -59,6 +59,8 @@ A worker that is slow rather than dead is refused at its own terminal write once
 row. Under `atomic=True` its effects roll back; under `atomic=False` they stand. So size a binding's
 `lease` to its longest run.
 
+A binding's `lease` defaults to one hour. Each claim of a run counts as one attempt, and an idempotent run that has used up `max_attempts`, which defaults to three, is abandoned rather than run again.
+
 ### Guarantees
 
 - **Every move is a compare-and-swap on `(state, attempts)`.** Two sweeps agree on one transition, and
