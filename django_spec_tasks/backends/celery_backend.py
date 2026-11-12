@@ -12,7 +12,14 @@ def _run_spec(run_id: str) -> None:
 
 
 class CeleryBackend:
-    """Hands a run to a Celery worker."""
+    """Hands a run to a Celery worker.
+
+    ``queue`` names the queue to send to; ``None`` leaves routing to the project's
+    ``task_routes``, keyed by the stable task name. The package sets no retry, no late
+    acknowledgement, no result backend and no schedule, each because the row already
+    answers it: a second copy of a message finds the claim taken, a lost one is asked
+    for again by the sweep, and the result is on the row.
+    """
 
     def __init__(self, queue: str | None = None) -> None:
         self.queue = queue

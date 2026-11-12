@@ -33,7 +33,35 @@ _REFUSAL_CODE_LENGTH: int = cast(Any, SpecRun._meta.get_field("refusal_code")).m
 
 
 def run_spec(run_id: str) -> None:
-    """Run the row ``run_id`` names, once, whatever number of messages name it."""
+    """Run the row ``run_id`` names, once, whatever number of messages name it.
+
+    Both backends call this. It returns nothing, and no retry policy of a queue's applies:
+    whether a run may run again is read from the row, by the sweep.
+
+    A message for a row that is not ``PENDING`` costs one query and runs nothing. Otherwise
+    the row is claimed, the principal resolved, and the spec called through the kernel's
+    ``dispatch`` and ``present``, so the worker re-checks everything enqueue checked and the
+    Validator runs for the first time. The row ends in the state
+    [`run_state_for`][django_spec_tasks.worker.run_state_for.run_state_for] gives what was
+    raised, or in ``SUCCEEDED`` with what was presented, or in ``OUTPUT_TOO_LARGE``. A service
+    whose target is gone never ran, and ends ``REFUSED``; a selector finding nothing has
+    answered, and ends ``SUCCEEDED``, each with ``kind="not_found"``.
+
+    **Under** ``atomic=True`` one transaction holds ``around_run``, ``dispatch``, ``present``,
+    the terminal write and ``on_finish``, so the service's work and the row's state commit as
+    one fact, and a worker that dies before the commit has left nothing but a ``RUNNING``
+    row. A refusal rolls that transaction back first, then writes its state and runs
+    ``on_finish`` in a transaction of its own. **Under** ``atomic=False``, and for a selector,
+    no transaction surrounds the call, and only the write and ``on_finish`` share one.
+
+    A write finding the row is no longer this attempt's writes nothing and rolls its own
+    transaction back: a worker that lost its claim cannot commit.
+
+    Only an ``Exception`` is an ending. A ``BaseException`` is the worker dying, and passes
+    through untouched, as does anything ``on_finish`` raises: both leave the row ``RUNNING``.
+    The sweep answers a dead worker's. It calls the same hook, so a hook that always raises
+    keeps its row ``RUNNING`` until it stops raising.
+    """
     run = SpecRun.objects.filter(pk=run_id, state=RunState.PENDING).first()
     if run is None:
         return

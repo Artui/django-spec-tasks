@@ -25,7 +25,33 @@ def enqueue(
     *,
     actor: Any,
 ) -> str:
-    """Record a run of ``spec_name`` and ask the binding's backend to execute it on commit."""
+    """Record a run of ``spec_name`` and ask the binding's backend to execute it on commit.
+
+    Everything that can be refused while the caller is still on the stack is refused here,
+    and a refusal writes no row and sends nothing. What is left is decided by the worker,
+    which checks again through the kernel's ``dispatch``: a grant cannot cross a process,
+    so none is carried.
+
+    ``actor`` is required. ``None`` is the declared system run, which a spec admits or
+    refuses by its own permissions; leaving it out is a ``TypeError``, so an unauthenticated
+    call cannot become a system run by omission.
+
+    The Validator does not run here. A stock one queries, needs the row it acts on, and its
+    answer would not hold by the time a worker ran.
+
+    Returns:
+        The run's id, as a string. A backend that carries a task id is given this one.
+
+    Raises:
+        LookupError: The binding's registry holds no spec of that name.
+        TypeError: The spec takes a ``file`` parameter; ``actor`` is a principal with no
+            primary key (an anonymous user); or ``params`` or the carried values would
+            change on their way through JSON.
+        PrincipalUnavailable: ``actor`` is deactivated.
+        InvalidArguments: ``params`` do not fit the spec.
+        NotPermitted: ``actor`` fails the spec's class-level permissions.
+        ImproperlyConfigured: A parameter collides with one of the binding's pool seeds.
+    """
     registered = binding.registry.get(spec_name)
     if registered is None:
         raise LookupError(f"Binding {binding.name!r} has no spec named {spec_name!r}.")

@@ -26,7 +26,48 @@ _DEFAULT_GRACE = cast("timedelta", TaskBinding.__dataclass_fields__["grace"].def
 
 
 def sweep_runs(*, limit: int = 1000, batch_size: int = 100) -> SweepReport:
-    """Answer the runs the queue lost and end the ones whose worker did not come back."""
+    """Answer the runs the queue lost and end the ones whose worker did not come back.
+
+    Run it on a schedule the project owns: a beat entry, cron, the platform's scheduler.
+    This package ships none, because whether a queue is one's own is not for a library
+    to assume.
+
+    Each row's outcome:
+
+    - ``PENDING``, ``grace`` past its last ask: the backend is asked again; the claim
+      stops a second run.
+    - ``RUNNING`` past its lease, spec declares ``idempotent=True``, ``attempts`` to spare:
+      back to ``PENDING`` and the backend is asked.
+    - The same, with ``attempts >= max_attempts``: ``ABANDONED``, because a poison run must
+      not loop.
+    - The same, with ``idempotent`` ``False`` or undeclared: ``ABANDONED``.
+    - Either, with the binding or the spec gone: ``SPEC_UNAVAILABLE``.
+
+    ``idempotent`` is read off the registered spec now, never off the row, so a spec whose
+    declaration changed answers with what it declares today. ``None`` is undeclared and does
+    not read as ``True``.
+
+    Every transition is a compare-and-swap on ``(state, attempts)``, so two sweeps agree and
+    a worker that claimed the row meanwhile is not overwritten. An ask is stamped on
+    ``asked_at`` before the backend hears it, conditioned on the value read as well, so two
+    sweeps send one message, and a row waits out its grace again whether or not the backend
+    took it. A backend that raises is counted in ``errors``, and the sweep carries on.
+
+    ``on_finish`` runs for ``ABANDONED`` and ``SPEC_UNAVAILABLE`` in the transaction with the
+    write. One that raises takes the write back: it is counted in ``errors``, and the row
+    stays as it was, on every sweep, until the hook stops raising.
+
+    Each binding is walked apart, its lapsed rows first and then its pending ones, longest
+    waiting first, ``batch_size`` at a time, and ``limit`` is its own, so a binding whose
+    queue is dead or whose hook is broken holds back nothing but itself.
+
+    Args:
+        limit: The most rows one sweep looks at for one binding.
+        batch_size: How many rows are read from the database at once.
+
+    Returns:
+        What was done, counted by outcome.
+    """
     counts: Counter[str] = Counter()
     for run in _candidates(timezone.now(), limit, batch_size):
         try:

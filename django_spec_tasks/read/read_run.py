@@ -12,7 +12,20 @@ from django_spec_tasks.types.run_status import RunStatus
 
 
 def read_run(binding: TaskBinding, run_id: str, principal: Any) -> RunStatus:
-    """What ``principal`` may see of a run: its status, never what it was asked."""
+    """What ``principal`` may see of a run: its status, never what it was asked.
+
+    The call's ``params`` and its presented output are as sensitive as the call itself, so
+    the default reader is the run's owner. ``binding.can_read(principal, run)`` widens
+    that. A principal that is deactivated is refused either way: it never acts.
+
+    A run that is not this principal's, an id nobody wrote, a malformed id and another
+    binding's run all raise the same ``NotPermitted`` with the same message, so an id
+    cannot be probed for whether it exists. A system run has no owner, so only
+    ``can_read`` reads it.
+
+    Raises:
+        NotPermitted: For every refusal above.
+    """
     run = runs_named(binding, run_id).first()
     if run is None or not _may_read(binding, run, principal):
         raise NotPermitted()

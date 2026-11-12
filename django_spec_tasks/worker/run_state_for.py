@@ -32,5 +32,11 @@ expression, not seven rows, and a deleted row whose base answers still passes
 
 
 def run_state_for(error: BaseException) -> RunState:
-    """The [`RunState`][django_spec_tasks.types.run_state.RunState] ``error`` ends a run in."""
+    """The [`RunState`][django_spec_tasks.types.run_state.RunState] ``error`` ends a run in.
+
+    Every refusal has one, a subclass a later release adds included: it takes its nearest
+    listed base's, so a new refusal of the call is ``INVALID`` and a new refusal by the
+    operation ``REFUSED``. Anything else is ``FAILED``: an exception nobody declared is a
+    bug, and ``FAILED`` is never the answer to a refusal.
+    """
     return next((state for kind, state in _STATES if isinstance(error, kind)), RunState.FAILED)

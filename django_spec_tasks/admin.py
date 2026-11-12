@@ -13,7 +13,15 @@ _PAYLOADS = frozenset({"params", "carried", "output"})
 
 @admin.register(SpecRun)
 class SpecRunAdmin(admin.ModelAdmin):
-    """Runs, to look at and never to change."""
+    """Runs, to look at and never to change.
+
+    Nothing here adds, changes or deletes a row, and there are no actions: an admin action
+    skips the change permission, so an action that deleted would delete for a user who
+    could not. ``params``, ``carried`` and ``output`` hold what the call was given and what
+    it returned, so they are hidden, and refused as URL lookups, since a count of results
+    would answer a guess; a project that wants them in its admin sets ``show_payloads`` on a
+    subclass. The ``traceback`` shows, because triage needs it.
+    """
 
     show_payloads = False
 
