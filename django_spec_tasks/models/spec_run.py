@@ -26,8 +26,8 @@ class SpecRun(models.Model):
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    binding = models.CharField(max_length=255)
-    spec_name = models.CharField(max_length=255)
+    binding = models.TextField()
+    spec_name = models.TextField()
     params = models.JSONField()
     actor_pk = models.TextField(null=True, blank=True)
     carried = models.JSONField(default=dict, blank=True)
@@ -41,8 +41,8 @@ class SpecRun(models.Model):
     output = models.JSONField(null=True, blank=True, encoder=DjangoJSONEncoder)
     instance_pk = models.TextField(null=True, blank=True)
     package_version = models.CharField(max_length=64, blank=True, default="")
-    refusal_class = models.CharField(max_length=255, null=True, blank=True)
-    refusal_code = models.CharField(max_length=255, null=True, blank=True)
+    refusal_class = models.TextField(null=True, blank=True)
+    refusal_code = models.TextField(null=True, blank=True)
     refusal_detail = models.JSONField(null=True, blank=True, encoder=DjangoJSONEncoder)
     traceback = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now, editable=False)

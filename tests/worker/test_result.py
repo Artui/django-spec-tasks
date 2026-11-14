@@ -13,10 +13,13 @@ from django_service_specs import (
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
+    SpecRegistry,
     Unrestricted,
     call_transport,
 )
 
+from django_spec_tasks.binding.task_binding import TaskBinding
+from django_spec_tasks.caller.enqueue import enqueue
 from django_spec_tasks.models.spec_run import SpecRun
 from django_spec_tasks.types.run_state import RunState
 from django_spec_tasks.version import __version__
@@ -322,6 +325,23 @@ def test_a_target_whose_key_is_past_255_characters_ends_succeeded_with_the_key_w
     assert run.state == RunState.SUCCEEDED
     assert run.instance_pk == key
     assert run.output == "long"
+
+
+class _Unsent:
+    def enqueue(self, run_id: str) -> None: ...
+
+
+def test_a_binding_and_spec_named_past_255_characters_run_from_enqueue_to_the_end() -> None:
+    binding_name, spec_name = "b" * 300, "s" * 300
+    registry = SpecRegistry()
+    registry.register(spec_name, ServiceSpec(service=lambda: "done", permissions=[Unrestricted()]))
+    TaskBinding(name=binding_name, registry=registry, backend=_Unsent())
+
+    run_spec(enqueue(TaskBinding.named(binding_name), spec_name, {}, actor=None))
+
+    run = SpecRun.objects.get()
+    assert (run.binding, run.spec_name) == (binding_name, spec_name)
+    assert (run.state, run.output) == (RunState.SUCCEEDED, "done")
 
 
 def test_the_output_is_stamped_with_the_version_that_wrote_it(

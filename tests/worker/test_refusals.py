@@ -286,7 +286,7 @@ def test_a_refusal_s_detail_no_column_could_store_keeps_its_state_and_its_words(
     assert run.refusal_detail == {"message": "the order is closed", "errors": None, "schema": None}
 
 
-def test_a_refusal_code_past_its_column_is_clipped_and_not_a_stuck_run(
+def test_a_refusal_code_past_255_characters_reads_back_whole(
     make_run: Callable[..., SpecRun],
 ) -> None:
     error = ServiceError("no")
@@ -297,10 +297,23 @@ def test_a_refusal_code_past_its_column_is_clipped_and_not_a_stuck_run(
 
     run.refresh_from_db()
     assert run.state == RunState.REFUSED
-    assert run.refusal_code == "x" * 255
+    assert run.refusal_code == "x" * 300
 
 
-def test_a_refusal_code_holding_a_nul_inside_its_clip_is_stored_without_it(
+def test_a_refusal_class_named_past_255_characters_reads_back_whole(
+    make_run: Callable[..., SpecRun],
+) -> None:
+    long_named = type("R" * 300, (ServiceError,), {})
+    run = make_run(_raising(long_named("no")))
+
+    run_spec(str(run.pk))
+
+    run.refresh_from_db()
+    assert run.state == RunState.REFUSED
+    assert run.refusal_class == "R" * 300
+
+
+def test_a_refusal_code_holding_a_nul_is_stored_without_it(
     make_run: Callable[..., SpecRun],
 ) -> None:
     error = ServiceError("no")
