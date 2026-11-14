@@ -335,9 +335,9 @@ def test_a_binding_and_spec_named_past_255_characters_run_from_enqueue_to_the_en
     binding_name, spec_name = "b" * 300, "s" * 300
     registry = SpecRegistry()
     registry.register(spec_name, ServiceSpec(service=lambda: "done", permissions=[Unrestricted()]))
-    TaskBinding(name=binding_name, registry=registry, backend=_Unsent())
+    binding = TaskBinding(name=binding_name, registry=registry, backend=_Unsent())
 
-    run_spec(enqueue(TaskBinding.named(binding_name), spec_name, {}, actor=None))
+    run_spec(enqueue(binding, spec_name, {}, actor=None))
 
     run = SpecRun.objects.get()
     assert (run.binding, run.spec_name) == (binding_name, spec_name)
