@@ -46,6 +46,12 @@ orders = TaskBinding(name="orders", registry=order_specs, backend=CeleryBackend(
 Only `name`, `registry` and `backend` are required. The row records the binding's name, so do not rename one
 while it has runs pending.
 
+A run stores its output as JSON, so a spec that presents a file through the kernel's `FilePresenter` cannot
+run in the background. Building a binding whose registry holds one raises `ImproperlyConfigured`, naming the
+spec; a binding reads its registry when built, so a spec registered on it later is refused at `enqueue`
+instead. A spec the kernel's `file_output` itself refuses, such as a file presented by a `LIST` selector,
+fails at construction with the kernel's message.
+
 ## What a caller reads back
 
 ```python

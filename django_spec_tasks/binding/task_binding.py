@@ -8,6 +8,7 @@ from typing import Any, ClassVar
 
 from django_service_specs import DEFAULT_POOL_SEEDS, PoolSeeds, SpecRegistry, resolve_principal
 
+from django_spec_tasks.binding.utils import refuse_file_result
 from django_spec_tasks.types.task_backend import TaskBackend
 
 
@@ -22,7 +23,9 @@ class TaskBinding:
 
     Constructing one registers it under its name, since a worker has only the name a
     row recorded. Autodiscovery of each installed app's ``spec_tasks`` module is what
-    makes every binding known in a worker that imported Django.
+    makes every binding known in a worker that imported Django. A spec presenting a
+    file is refused here, and at ``enqueue`` for one registered later: a run stores
+    JSON, never a file.
 
     Attributes:
         name: Recorded on every row, so it must not change while runs are pending.
@@ -76,6 +79,8 @@ class TaskBinding:
                 f"A TaskBinding named {self.name!r} is already registered. A row records "
                 "a binding by name, so two of one name could not be told apart."
             )
+        for entry in self.registry.all():
+            refuse_file_result(self.name, entry.name, entry.spec)
         TaskBinding._registered[self.name] = self
 
     @classmethod

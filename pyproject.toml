@@ -41,9 +41,9 @@ dependencies = [
     # not. 4.2 also gives ``transaction.on_commit(robust=True)``, which enqueue
     # relies on so a broker down at commit cannot cancel a later callback.
     "django>=4.2",
-    # The first kernel release with ``build_call_context``, so every run is
-    # stamped as the ``task`` transport from this package's first release.
-    "django-service-specs>=0.29.0",
+    # The first kernel release with ``file_output``, which a binding asks of
+    # each spec so one presenting a file is refused before its first run.
+    "django-service-specs>=0.33.0",
 ]
 
 [project.optional-dependencies]

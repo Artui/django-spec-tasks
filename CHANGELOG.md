@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Changed
+- **Breaking:** a `TaskBinding` whose registry holds a spec presenting a file through the kernel's `FilePresenter` is refused with `ImproperlyConfigured`, naming the spec and saying file results are not stored by runs. A spec registered on the binding later is refused the same way at `enqueue`, which writes no row and sends nothing. Such a run used to fail at the write of its output.
+- The `django-service-specs` floor is 0.33.0, the first release with `file_output`.
 - The API reference's docstrings are restored.
 - The operating and worker pages state the defaults of `lease`, `max_attempts` and `max_output_bytes`, and the E001 entry says a router is refused for reads as well as writes.
 

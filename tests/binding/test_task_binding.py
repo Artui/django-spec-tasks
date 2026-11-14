@@ -4,7 +4,17 @@ from dataclasses import FrozenInstanceError, fields
 from datetime import timedelta
 
 import pytest
-from django_service_specs import DEFAULT_POOL_SEEDS, SpecRegistry, resolve_principal
+from django.core.exceptions import ImproperlyConfigured
+from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
+    FilePresenter,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    SpecRegistry,
+    Unrestricted,
+    resolve_principal,
+)
 
 from django_spec_tasks.binding.task_binding import TaskBinding
 
@@ -84,3 +94,49 @@ def test_clear_registry_forgets_every_binding() -> None:
 def test_the_registry_is_back_after_a_test_clears_it() -> None:
     # The fixture in conftest.py: the test above cleared it, and this one runs after.
     assert TaskBinding.named("discovered") is not None
+
+
+def _report() -> SelectorSpec:
+    return SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=lambda: b"%PDF",
+        presenter=FilePresenter("application/pdf", filename="report.pdf"),
+        permissions=[Unrestricted()],
+    )
+
+
+def _file_registry() -> SpecRegistry:
+    registry = SpecRegistry()
+    registry.register("plain", ServiceSpec(service=lambda: None, permissions=[Unrestricted()]))
+    registry.register("report", _report())
+    registry.register(
+        "export",
+        ServiceSpec(
+            service=lambda: None,
+            output_selector_spec=_report().derive(permissions=None),
+            permissions=[Unrestricted()],
+        ),
+    )
+    return registry
+
+
+@pytest.mark.parametrize("spec_name", ["report", "export"])
+def test_a_spec_presenting_a_file_is_refused_naming_it_and_why(spec_name: str) -> None:
+    registry = _file_registry().subset("plain", spec_name)
+    with pytest.raises(ImproperlyConfigured) as refused:
+        TaskBinding(name="files", registry=registry, backend=_NoQueue())
+    assert f"'files' cannot run spec {spec_name!r}" in str(refused.value)
+    assert "file results are not stored by runs" in str(refused.value)
+
+
+def test_a_refused_binding_is_not_registered() -> None:
+    with pytest.raises(ImproperlyConfigured):
+        TaskBinding(name="files", registry=_file_registry(), backend=_NoQueue())
+    assert TaskBinding.named("files") is None
+
+
+def test_a_spec_with_a_json_presenter_is_accepted() -> None:
+    binding = TaskBinding(
+        name="json", registry=_file_registry().subset("plain"), backend=_NoQueue()
+    )
+    assert TaskBinding.named("json") is binding
