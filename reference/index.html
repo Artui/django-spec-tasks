@@ -1287,7 +1287,7 @@ own paths because each imports an optional queue. Kernel names a binding reads, 
 <h2 id="system-checks">System checks<a class="headerlink" href="#system-checks" title="Permanent link">&para;</a></h2>
 <p>Registered by the app's config, so a project gets them by listing <code>"django_spec_tasks"</code> in <code>INSTALLED_APPS</code>.</p>
 <ul>
-<li><strong><code>django_spec_tasks.E001</code></strong>: a database router sends <code>SpecRun</code> away from the default alias. The kernel's
+<li><strong><code>django_spec_tasks.E001</code></strong>: a database router sends <code>SpecRun</code> away from the default alias, for reads or for writes. The kernel's
   transaction opens on the default alias, and the worker needs the row inside it.</li>
 </ul>
 <h2 id="management-commands">Management commands<a class="headerlink" href="#management-commands" title="Permanent link">&para;</a></h2>
@@ -1415,7 +1415,8 @@ change on their way through JSON.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A parameter collides with one of the binding's pool seeds.</p>
+                <p>The spec presents a file, which a run cannot store; or a
+parameter collides with one of the binding's pool seeds.</p>
               </div>
             </td>
           </tr>
@@ -1527,7 +1528,9 @@ imports a model: that is what keeps this class importable before the app registr
 is ready.</p>
 <p>Constructing one registers it under its name, since a worker has only the name a
 row recorded. Autodiscovery of each installed app's <code>spec_tasks</code> module is what
-makes every binding known in a worker that imported Django.</p>
+makes every binding known in a worker that imported Django. A spec presenting a
+file is refused here, and at <code>enqueue</code> for one registered later: a run stores
+JSON, never a file.</p>
 
 
 <p><span class="doc-section-title">Attributes:</span></p>
@@ -2087,36 +2090,17 @@ bug, and <code>FAILED</code> is never the answer to a refusal.</p>
 <p>Run it on a schedule the project owns: a beat entry, cron, the platform's scheduler.
 This package ships none, because whether a queue is one's own is not for a library
 to assume.</p>
-<table>
-<thead>
-<tr>
-<th>Row</th>
-<th>Outcome</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>PENDING</code>, <code>grace</code> past its last ask</td>
-<td>the backend is asked again; the claim stops a second run</td>
-</tr>
-<tr>
-<td><code>RUNNING</code> past its lease, spec declares <code>idempotent=True</code>, <code>attempts</code> to spare</td>
-<td>back to <code>PENDING</code> and the backend is asked</td>
-</tr>
-<tr>
-<td>the same, <code>attempts &gt;= max_attempts</code></td>
-<td><code>ABANDONED</code>: a poison run must not loop</td>
-</tr>
-<tr>
-<td>the same, <code>idempotent</code> <code>False</code> or undeclared</td>
-<td><code>ABANDONED</code></td>
-</tr>
-<tr>
-<td>either, binding or spec gone</td>
-<td><code>SPEC_UNAVAILABLE</code></td>
-</tr>
-</tbody>
-</table>
+<p>Each row's outcome:</p>
+<ul>
+<li><code>PENDING</code>, <code>grace</code> past its last ask: the backend is asked again; the claim
+  stops a second run.</li>
+<li><code>RUNNING</code> past its lease, spec declares <code>idempotent=True</code>, <code>attempts</code> to spare:
+  back to <code>PENDING</code> and the backend is asked.</li>
+<li>The same, with <code>attempts &gt;= max_attempts</code>: <code>ABANDONED</code>, because a poison run must
+  not loop.</li>
+<li>The same, with <code>idempotent</code> <code>False</code> or undeclared: <code>ABANDONED</code>.</li>
+<li>Either, with the binding or the spec gone: <code>SPEC_UNAVAILABLE</code>.</li>
+</ul>
 <p><code>idempotent</code> is read off the registered spec now, never off the row, so a spec whose
 declaration changed answers with what it declares today. <code>None</code> is undeclared and does
 not read as <code>True</code>.</p>

@@ -751,6 +751,7 @@ process that sweeps on the same code as the one that enqueues.</p>
 <p>A worker that is slow rather than dead is refused at its own terminal write once the sweep has moved the
 row. Under <code>atomic=True</code> its effects roll back; under <code>atomic=False</code> they stand. So size a binding's
 <code>lease</code> to its longest run.</p>
+<p>A binding's <code>lease</code> defaults to one hour. Each claim of a run counts as one attempt, and an idempotent run that has used up <code>max_attempts</code>, which defaults to three, is abandoned rather than run again.</p>
 <h3 id="guarantees">Guarantees<a class="headerlink" href="#guarantees" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Every move is a compare-and-swap on <code>(state, attempts)</code>.</strong> Two sweeps agree on one transition, and

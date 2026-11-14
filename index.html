@@ -658,6 +658,11 @@ finds at startup:</p>
 </span></code></pre></div>
 <p>Only <code>name</code>, <code>registry</code> and <code>backend</code> are required. The row records the binding's name, so do not rename one
 while it has runs pending.</p>
+<p>A run stores its output as JSON, so a spec that presents a file through the kernel's <code>FilePresenter</code> cannot
+run in the background. Building a binding whose registry holds one raises <code>ImproperlyConfigured</code>, naming the
+spec; a binding reads its registry when built, so a spec registered on it later is refused at <code>enqueue</code>
+instead. A spec the kernel's <code>file_output</code> itself refuses, such as a file presented by a <code>LIST</code> selector,
+fails at construction too, naming the binding and the spec beside the kernel's reason.</p>
 <h2 id="what-a-caller-reads-back">What a caller reads back<a class="headerlink" href="#what-a-caller-reads-back" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_tasks</span><span class="w"> </span><span class="kn">import</span> <span class="n">read_run</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>

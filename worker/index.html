@@ -821,7 +821,7 @@ could store keeps its state and its message, with both null.</p>
 never <code>traceback</code>, so a fault's words stay where only an operator looks.</p>
 <h2 id="the-result">The result<a class="headerlink" href="#the-result" title="Permanent link">&para;</a></h2>
 <p><code>SUCCEEDED</code> records <code>kind</code>, and <code>output</code>, which is <code>present(spec, result)</code>: what a JSON transport would
-have sent, stamped with <code>package_version</code> since it is a contract. <code>instance_pk</code> keeps the target's identity.
+have sent, stamped with <code>package_version</code> since it is a contract. <code>instance_pk</code> keeps the target's identity, as text with no length bound, so a key of any length is stored whole; <code>actor_pk</code>, <code>binding</code>, <code>spec_name</code>, <code>refusal_class</code> and <code>refusal_code</code> are the same.
 <code>kind</code> is <code>"instance"</code>, <code>"list"</code> or <code>"not_found"</code>. A selector that finds nothing has answered, so it ends
 <code>SUCCEEDED</code> with <code>kind="not_found"</code> and no output. A service whose target is gone never ran, so it ends
 <code>REFUSED</code>, with <code>kind="not_found"</code> and <code>refusal_class="ServiceNotFound"</code>, as a <code>ServiceNotFound</code> the service
@@ -829,11 +829,12 @@ raises itself does: a refund of a deleted order must not read as a refund that h
 <p><strong>The bound.</strong> Past <code>max_output_bytes</code>, measured as the column writes it, the run ends <code>OUTPUT_TOO_LARGE</code>
 with <code>{"size": ..., "limit": ...}</code> in <code>refusal_detail</code>, and <code>output</code> stays null. Under <code>atomic=True</code> the work
 rolls back with it, so the caller reads a clean refusal. Under <code>atomic=False</code> the work stands, and the state
-says the result was not stored. Output is never truncated.</p>
+says the result was not stored. Output is never truncated.
+The limit is the binding's <code>max_output_bytes</code>, which defaults to 1 MiB.</p>
 <p>Output a JSON column cannot hold, which is a presenter's bug, ends <code>FAILED</code>, as any exception nobody declared
 does. That counts <code>NaN</code>, <code>inf</code>, a NUL character and half a surrogate pair, which Postgres refuses and SQLite
-mostly stores. A refusal keeps its state however it reads: a message and a traceback lose what no text column
-holds, a <code>code</code> is clipped to its column, and a detail no column could hold is left out.</p>
+mostly stores. A refusal keeps its state however it reads: a message, a traceback and a <code>code</code> lose what no text
+column holds, and a detail no column could hold is left out.</p>
 <h2 id="progress">Progress<a class="headerlink" href="#progress" title="Permanent link">&para;</a></h2>
 <p>A service declaring <code>progress</code> gets a reporter that writes to the row, for as long as this attempt holds it.
 With a <code>total</code>, the <code>progress</code> column holds the fraction done; without one, the service's own unit.
