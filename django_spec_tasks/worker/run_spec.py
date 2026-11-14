@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import traceback
 from contextlib import nullcontext
-from typing import Any, cast
+from typing import Any
 
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
@@ -28,8 +28,6 @@ from django_spec_tasks.worker.row_progress import RowProgress
 from django_spec_tasks.worker.run_state_for import run_state_for
 
 logger = logging.getLogger(__name__)
-
-_REFUSAL_CODE_LENGTH: int = cast(Any, SpecRun._meta.get_field("refusal_code")).max_length
 
 
 def run_spec(run_id: str) -> None:
@@ -171,7 +169,7 @@ def _ending_for(error: Exception) -> dict[str, Any]:
     return {
         "state": state,
         "refusal_class": type(error).__name__,
-        "refusal_code": None if code is None else _storable(str(code))[:_REFUSAL_CODE_LENGTH],
+        "refusal_code": None if code is None else _storable(str(code)),
         "refusal_detail": _refusal_detail(error),
     }
 

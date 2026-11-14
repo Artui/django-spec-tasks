@@ -18,6 +18,7 @@ Everything that can be refused while the caller is still on the stack is, and a 
 | --- | --- |
 | a spec name the binding's registry does not hold | `LookupError`, naming the binding and the name |
 | a spec with a `file` parameter, at any depth | `TypeError`, naming the parameter |
+| a spec that presents a file through `FilePresenter`, registered after the binding was built | `ImproperlyConfigured`, naming the spec |
 | an `actor` with no primary key, such as `AnonymousUser` | `TypeError`, naming `actor=None` |
 | a deactivated `actor` | `PrincipalUnavailable` |
 | an unknown, missing, mistyped or out-of-choices argument | `InvalidArguments` |

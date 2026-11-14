@@ -13,6 +13,7 @@ from django_service_specs import (
 )
 
 from django_spec_tasks.binding.task_binding import TaskBinding
+from django_spec_tasks.binding.utils import refuse_file_result
 from django_spec_tasks.models.spec_run import SpecRun
 from django_spec_tasks.models.storable_json import storable_json
 from django_spec_tasks.types.run_state import RunState
@@ -50,12 +51,14 @@ def enqueue(
         PrincipalUnavailable: ``actor`` is deactivated.
         InvalidArguments: ``params`` do not fit the spec.
         NotPermitted: ``actor`` fails the spec's class-level permissions.
-        ImproperlyConfigured: A parameter collides with one of the binding's pool seeds.
+        ImproperlyConfigured: The spec presents a file, which a run cannot store; or a
+            parameter collides with one of the binding's pool seeds.
     """
     registered = binding.registry.get(spec_name)
     if registered is None:
         raise LookupError(f"Binding {binding.name!r} has no spec named {spec_name!r}.")
     spec = registered.spec
+    refuse_file_result(binding.name, spec_name, spec)
 
     for path in _file_parameters(kernel_spec(spec).parameters()):
         raise TypeError(

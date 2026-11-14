@@ -2,7 +2,12 @@
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-11-14
+
 ### Changed
+- **Breaking:** a `TaskBinding` whose registry holds a spec presenting a file through the kernel's `FilePresenter` is refused with `ImproperlyConfigured`, naming the spec and saying file results are not stored by runs. A spec registered on the binding later is refused the same way at `enqueue`, which writes no row and sends nothing. A file the kernel's `file_output` refuses outright, such as one presented by a `LIST` selector, is refused the same way with the kernel's reason. Such a run used to fail at the write of its output.
+- The `django-service-specs` floor is 0.33.0, the first release with `file_output`.
+- `SpecRun.binding`, `spec_name`, `actor_pk`, `instance_pk`, `refusal_class` and `refusal_code` are `TextField`s rather than `CharField(max_length=255)`, in migration `0002_text_columns`, so a binding or spec name, a primary key, a refusal's class name or its code longer than 255 characters is stored whole. Before, Postgres refused a long name at enqueue and a long key at the terminal write, past every handler, leaving the run `RUNNING` (under `atomic=False` the service's work had already committed), and a refusal code was silently clipped to 255 characters. Pre-1.0 schema change: the migration alters the six columns.
 - The API reference's docstrings are restored.
 - The operating and worker pages state the defaults of `lease`, `max_attempts` and `max_output_bytes`, and the E001 entry says a router is refused for reads as well as writes.
 
@@ -27,5 +32,6 @@
 - `SpecRun` is registered read-only in the admin: no add, change, delete or actions; `params`, `carried` and `output` are hidden, and refused as URL lookups, unless a subclass sets `show_payloads`.
 - A page on composing with django-domain-events with no import in either direction: an event starting a run, a service firing inside a run, a run finishing and firing an event, and a delayed run, built on `carry=`, `around_run=` and `on_finish=`; it states the one-database condition, that a replay is a new run, attribution against authorization, and why a run is not a delivery.
 
-[Unreleased]: https://github.com/Artui/django-spec-tasks/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-tasks/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Artui/django-spec-tasks/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Artui/django-spec-tasks/compare/v0.0.0...v0.1.0

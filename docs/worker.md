@@ -87,7 +87,7 @@ never `traceback`, so a fault's words stay where only an operator looks.
 ## The result
 
 `SUCCEEDED` records `kind`, and `output`, which is `present(spec, result)`: what a JSON transport would
-have sent, stamped with `package_version` since it is a contract. `instance_pk` keeps the target's identity.
+have sent, stamped with `package_version` since it is a contract. `instance_pk` keeps the target's identity, as text with no length bound, so a key of any length is stored whole; `actor_pk`, `binding`, `spec_name`, `refusal_class` and `refusal_code` are the same.
 `kind` is `"instance"`, `"list"` or `"not_found"`. A selector that finds nothing has answered, so it ends
 `SUCCEEDED` with `kind="not_found"` and no output. A service whose target is gone never ran, so it ends
 `REFUSED`, with `kind="not_found"` and `refusal_class="ServiceNotFound"`, as a `ServiceNotFound` the service
@@ -101,8 +101,8 @@ The limit is the binding's `max_output_bytes`, which defaults to 1 MiB.
 
 Output a JSON column cannot hold, which is a presenter's bug, ends `FAILED`, as any exception nobody declared
 does. That counts `NaN`, `inf`, a NUL character and half a surrogate pair, which Postgres refuses and SQLite
-mostly stores. A refusal keeps its state however it reads: a message and a traceback lose what no text column
-holds, a `code` is clipped to its column, and a detail no column could hold is left out.
+mostly stores. A refusal keeps its state however it reads: a message, a traceback and a `code` lose what no text
+column holds, and a detail no column could hold is left out.
 
 ## Progress
 
