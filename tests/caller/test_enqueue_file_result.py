@@ -27,7 +27,9 @@ def test_a_file_spec_registered_after_the_binding_is_refused_at_enqueue(
             permissions=[Unrestricted()],
         ),
     )
-    with transaction.atomic(), pytest.raises(ImproperlyConfigured, match="'report'"):
+    with transaction.atomic(), pytest.raises(ImproperlyConfigured) as refused:
         enqueue(binding, "report", {}, actor=user)
+    assert "cannot run spec 'report'" in str(refused.value)
+    assert "file results are not stored by runs" in str(refused.value)
     assert not SpecRun.objects.exists()
     assert backend.sent == []

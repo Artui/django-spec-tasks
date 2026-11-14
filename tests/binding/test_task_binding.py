@@ -140,3 +140,21 @@ def test_a_spec_with_a_json_presenter_is_accepted() -> None:
         name="json", registry=_file_registry().subset("plain"), backend=_NoQueue()
     )
     assert TaskBinding.named("json") is binding
+
+
+def test_a_file_the_kernel_refuses_is_refused_naming_the_binding_and_the_spec() -> None:
+    registry = SpecRegistry()
+    registry.register(
+        "reports",
+        SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=lambda: [],
+            presenter=FilePresenter("application/pdf", filename="reports.pdf"),
+            permissions=[Unrestricted()],
+        ),
+    )
+    with pytest.raises(ImproperlyConfigured) as refused:
+        TaskBinding(name="lists", registry=registry, backend=_NoQueue())
+    assert "TaskBinding 'lists' cannot run spec 'reports'" in str(refused.value)
+    assert "presents a list of rows" in str(refused.value)
+    assert TaskBinding.named("lists") is None

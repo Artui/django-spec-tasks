@@ -50,7 +50,7 @@ A run stores its output as JSON, so a spec that presents a file through the kern
 run in the background. Building a binding whose registry holds one raises `ImproperlyConfigured`, naming the
 spec; a binding reads its registry when built, so a spec registered on it later is refused at `enqueue`
 instead. A spec the kernel's `file_output` itself refuses, such as a file presented by a `LIST` selector,
-fails at construction with the kernel's message.
+fails at construction too, naming the binding and the spec beside the kernel's reason.
 
 ## What a caller reads back
 

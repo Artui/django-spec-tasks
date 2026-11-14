@@ -8,7 +8,13 @@ def refuse_file_result(
     binding_name: str, spec_name: str, spec: ServiceSpec | SelectorSpec | SpecSource
 ) -> None:
     """Raise ``ImproperlyConfigured`` when ``spec`` presents a file, which a run cannot store."""
-    if file_output(spec) is not None:
+    try:
+        presenter = file_output(spec)
+    except ImproperlyConfigured as error:
+        raise ImproperlyConfigured(
+            f"TaskBinding {binding_name!r} cannot run spec {spec_name!r}: {error}"
+        ) from error
+    if presenter is not None:
         raise ImproperlyConfigured(
             f"TaskBinding {binding_name!r} cannot run spec {spec_name!r}: it presents a file "
             "through FilePresenter, and file results are not stored by runs. Serve it from a "

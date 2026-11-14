@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### Changed
-- **Breaking:** a `TaskBinding` whose registry holds a spec presenting a file through the kernel's `FilePresenter` is refused with `ImproperlyConfigured`, naming the spec and saying file results are not stored by runs. A spec registered on the binding later is refused the same way at `enqueue`, which writes no row and sends nothing. Such a run used to fail at the write of its output.
+- **Breaking:** a `TaskBinding` whose registry holds a spec presenting a file through the kernel's `FilePresenter` is refused with `ImproperlyConfigured`, naming the spec and saying file results are not stored by runs. A spec registered on the binding later is refused the same way at `enqueue`, which writes no row and sends nothing. A file the kernel's `file_output` refuses outright, such as one presented by a `LIST` selector, is refused the same way with the kernel's reason. Such a run used to fail at the write of its output.
 - The `django-service-specs` floor is 0.33.0, the first release with `file_output`.
 - `SpecRun.binding`, `spec_name`, `actor_pk`, `instance_pk`, `refusal_class` and `refusal_code` are `TextField`s rather than `CharField(max_length=255)`, in migration `0002_text_columns`, so a binding or spec name, a primary key, a refusal's class name or its code longer than 255 characters is stored whole. Before, Postgres refused a long name at enqueue and a long key at the terminal write, past every handler, leaving the run `RUNNING` (under `atomic=False` the service's work had already committed), and a refusal code was silently clipped to 255 characters. Pre-1.0 schema change: the migration alters the six columns.
 - The API reference's docstrings are restored.
