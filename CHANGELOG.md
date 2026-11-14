@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- `SpecRun.actor_pk` and `SpecRun.instance_pk` are `TextField`s rather than `CharField(max_length=255)`, in migration `0002_text_primary_keys`, so a primary key longer than 255 characters is stored whole. Before, a 256-character key was refused by Postgres at the terminal write, past every handler, and left the run `RUNNING` (under `atomic=False` the service's work had already committed). Pre-1.0 schema change: the migration alters both columns.
 - The API reference's docstrings are restored.
 - The operating and worker pages state the defaults of `lease`, `max_attempts` and `max_output_bytes`, and the E001 entry says a router is refused for reads as well as writes.
 

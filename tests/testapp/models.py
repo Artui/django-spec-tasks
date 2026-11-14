@@ -21,3 +21,13 @@ class Note(models.Model):
 
     def __str__(self) -> str:
         return self.text
+
+
+class Document(models.Model):
+    """A target whose primary key is longer than any 255-character column could hold."""
+
+    key = models.CharField(max_length=400, primary_key=True)
+    title = models.CharField(max_length=64, default="")
+
+    def __str__(self) -> str:
+        return self.title

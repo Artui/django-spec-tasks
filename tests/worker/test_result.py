@@ -21,7 +21,7 @@ from django_spec_tasks.models.spec_run import SpecRun
 from django_spec_tasks.types.run_state import RunState
 from django_spec_tasks.version import __version__
 from django_spec_tasks.worker.run_spec import run_spec
-from tests.testapp.models import Note, Order
+from tests.testapp.models import Document, Note, Order
 
 pytestmark = pytest.mark.django_db
 
@@ -175,6 +175,7 @@ def test_a_float_json_cannot_write_is_a_failure_and_not_a_stuck_run(
         pytest.param({"a\x00b": 1}, id="in-a-key"),
         pytest.param({"text": "\\\x00"}, id="after-a-backslash"),
         pytest.param({"text": "a\ud800b"}, id="half-a-surrogate-pair"),
+        pytest.param({"text": "a\udc00b"}, id="half-a-low-surrogate"),
     ],
 )
 def test_output_a_json_column_cannot_hold_is_a_failure_and_not_a_stuck_run(
@@ -192,7 +193,7 @@ def test_output_a_json_column_cannot_hold_is_a_failure_and_not_a_stuck_run(
 
 
 @pytest.mark.parametrize(
-    "text", ["\\u0000", "\\\\u0000", "\\\\\\u0000x", "\\ud800", "a\U0001f600b"]
+    "text", ["\\u0000", "\\\\u0000", "\\\\\\u0000x", "\\ud800", "\\udc00", "a\U0001f600b"]
 )
 def test_text_that_only_reads_like_something_unstorable_is_stored(
     make_run: Callable[..., SpecRun], text: str
@@ -295,6 +296,32 @@ def test_the_target_s_identity_is_kept(make_run: Callable[..., SpecRun]) -> None
     assert run.state == RunState.SUCCEEDED
     assert run.instance_pk == str(order.pk)
     assert run.output == "A-1"
+
+
+@pytest.mark.parametrize("atomic", [True, False])
+@pytest.mark.parametrize("length", [255, 256, 400])
+def test_a_target_whose_key_is_past_255_characters_ends_succeeded_with_the_key_whole(
+    make_run: Callable[..., SpecRun], length: int, atomic: bool
+) -> None:
+    key = "k" * length
+    Document.objects.create(key=key, title="long")
+    target = SelectorSpec(
+        kind=SelectorKind.RETRIEVE, selector=lambda: Document.objects.filter(pk=key)
+    )
+    spec = ServiceSpec(
+        service=lambda instance: instance.title,
+        instance_selector_spec=target,
+        atomic=atomic,
+        permissions=[Unrestricted()],
+    )
+    run = make_run(spec)
+
+    run_spec(str(run.pk))
+
+    run.refresh_from_db()
+    assert run.state == RunState.SUCCEEDED
+    assert run.instance_pk == key
+    assert run.output == "long"
 
 
 def test_the_output_is_stamped_with_the_version_that_wrote_it(

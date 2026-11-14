@@ -3,6 +3,7 @@ from __future__ import annotations
 import decimal
 import json
 from collections.abc import Callable
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -168,6 +169,9 @@ class TestARefusalWritesNothing:
             pytest.param(
                 {"note": "a\ud800b"}, "carried value 'note' is not JSON", id="half-a-pair"
             ),
+            pytest.param(
+                {"note": "a\udc00b"}, "carried value 'note' is not JSON", id="half-a-low-pair"
+            ),
             pytest.param({"k\x00": "a"}, "holding a NUL", id="nul-in-a-key"),
             pytest.param({1: "a"}, "carried value key 1 is not a string", id="int-key"),
         ],
@@ -225,6 +229,18 @@ class TestTheRow:
         assert run.carried == {}
         assert run.state == RunState.PENDING
         assert run.attempts == 0
+
+    @pytest.mark.parametrize("length", [255, 256, 400])
+    @pytest.mark.django_db
+    def test_a_principal_whose_key_is_past_255_characters_is_stored_whole_and_pending(
+        self, binding: TaskBinding, backend: RecordingBackend, length: int
+    ) -> None:
+        actor = SimpleNamespace(pk="u" * length)
+        run_id = enqueue(binding, "open", OPEN, actor=actor)
+        run = SpecRun.objects.get()
+        assert run.actor_pk == "u" * length
+        assert run.state == RunState.PENDING
+        assert run_id == str(run.pk)
 
     @pytest.mark.django_db
     def test_a_system_run_records_no_actor(self, binding: TaskBinding) -> None:
