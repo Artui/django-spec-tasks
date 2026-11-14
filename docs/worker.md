@@ -87,7 +87,7 @@ never `traceback`, so a fault's words stay where only an operator looks.
 ## The result
 
 `SUCCEEDED` records `kind`, and `output`, which is `present(spec, result)`: what a JSON transport would
-have sent, stamped with `package_version` since it is a contract. `instance_pk` keeps the target's identity.
+have sent, stamped with `package_version` since it is a contract. `instance_pk` keeps the target's identity, as text with no length bound, so a key of any length is stored whole; `actor_pk` is the same.
 `kind` is `"instance"`, `"list"` or `"not_found"`. A selector that finds nothing has answered, so it ends
 `SUCCEEDED` with `kind="not_found"` and no output. A service whose target is gone never ran, so it ends
 `REFUSED`, with `kind="not_found"` and `refusal_class="ServiceNotFound"`, as a `ServiceNotFound` the service

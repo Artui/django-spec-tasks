@@ -252,6 +252,7 @@ def test_a_lapsed_principal_s_identifier_stays_out_of_what_a_reader_is_shown(
     [
         pytest.param("the order\x00 is closed", "the order is closed", id="nul"),
         pytest.param("the order\ud800 is closed", "the order? is closed", id="half-a-pair"),
+        pytest.param("the order\udc00 is closed", "the order? is closed", id="half-a-low-pair"),
     ],
 )
 def test_a_refusal_s_message_no_column_could_hold_keeps_its_state_and_its_words(
@@ -267,7 +268,9 @@ def test_a_refusal_s_message_no_column_could_hold_keeps_its_state_and_its_words(
 
 
 @pytest.mark.parametrize(
-    "value", ["a\x00b", "a\ud800b", float("nan")], ids=["nul", "half-a-pair", "nan"]
+    "value",
+    ["a\x00b", "a\ud800b", "a\udc00b", float("nan")],
+    ids=["nul", "half-a-pair", "half-a-low-pair", "nan"],
 )
 def test_a_refusal_s_detail_no_column_could_store_keeps_its_state_and_its_words(
     make_run: Callable[..., SpecRun], value: Any
@@ -297,11 +300,26 @@ def test_a_refusal_code_past_its_column_is_clipped_and_not_a_stuck_run(
     assert run.refusal_code == "x" * 255
 
 
+def test_a_refusal_code_holding_a_nul_inside_its_clip_is_stored_without_it(
+    make_run: Callable[..., SpecRun],
+) -> None:
+    error = ServiceError("no")
+    error.code = "bad\x00code"
+    run = make_run(_raising(error))
+
+    run_spec(str(run.pk))
+
+    run.refresh_from_db()
+    assert run.state == RunState.REFUSED
+    assert run.refusal_code == "badcode"
+
+
 @pytest.mark.parametrize(
     ("words", "stored"),
     [
         pytest.param("a bug\x00, somewhere", "a bug, somewhere", id="nul"),
         pytest.param("a bug\ud800, somewhere", "a bug?, somewhere", id="half-a-pair"),
+        pytest.param("a bug\udc00, somewhere", "a bug?, somewhere", id="half-a-low-pair"),
     ],
 )
 def test_a_fault_whose_words_no_column_could_hold_is_recorded_without_them(
